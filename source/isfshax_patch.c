@@ -41,19 +41,14 @@ bool isfshax_patch_apply(u32 fw_img_start){
         return false;
 
     // block updates
-    static const char system_update_url[] = "https://nus.wup.shop.nintendo.net/nus/services/NetUpdateSOAP";
+    static const char boot1_update_filename[] = "boot.img";
     static const u32 n = 0;
-    success = isfshax_search_patch(fw_img_start, end, system_update_url, sizeof(system_update_url), 0, &n, sizeof(n));
+    success = isfshax_search_patch(fw_img_start, end, boot1_update_filename, sizeof(boot1_update_filename), 0, &n, sizeof(n));
     BOOT1_serial(0x8D4D200 + success);
 
-    static const char system_update_command[] = "GetSystemUpdate";
-    success = isfshax_search_patch(fw_img_start, end, system_update_command, sizeof(system_update_command), 0, &n, sizeof(n));
+    static const char boot1_update_filename2[] = "/boot.img";
+    success = isfshax_search_patch(fw_img_start, end, boot1_update_filename2, sizeof(boot1_update_filename2), 0, &n, sizeof(n));
     BOOT1_serial(0x8D4D300 + success);
-
-    static const u8 update_check_end[] = { 0xe2, 0x43, 0x30, 0x03, 0xe1, 0x50, 0x00, 0x03, 0x05, 0x9f, 0x00, 0xf0, 0x01, 0x2f, 0xff, 0x1e, 0xe2, 0x83, 0x30, 0x02, 0xe1, 0x50, 0x00, 0x03, 0x0a, 0x00, 0x00, 0x1e };
-    static const u32 movr00 = 0xe3a00000;
-    success = isfshax_search_patch(fw_img_start, end, update_check_end, sizeof(update_check_end), 8, &movr00, sizeof(movr00));
-    BOOT1_serial(0x8D4D400 + success);
 
 
     // just in case prevent SCFM from formatting the slc
