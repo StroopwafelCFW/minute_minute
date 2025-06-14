@@ -157,9 +157,12 @@ void dump_menu_show()
 }
 
 static u32 dump_get_iosu_mlc_sectors(void){
-    u32 sectors = mlc_get_sectors();
-    if(sectors == -1)
-        return -1;
+    const sdmmc_device_context_t* mlc_info = mlc_get_card_info();
+    if (!mlc_info || mlc_info->num_sectors == 0 || mlc_info->num_sectors == (u32)-1) {
+        printf("Error: Failed to get valid MLC sector count in dump_get_iosu_mlc_sectors.\n");
+        return (u32)-1; // Return an error indicator
+    }
+    u32 sectors = mlc_info->num_sectors;
     if (sectors < 0xe60000) {
         // smaller than 8GB
         sectors -= 1;
@@ -1683,7 +1686,7 @@ int _dump_partition_rednand(void)
     printf("Partitioning SD card...\n");
 
 
-    printf("Partition layout on SD with 0x%08lX (0x%08lX) sectors:\n", (u32)sdcard_get_sectors(), end);
+    printf("Partition layout on SD with 0x%08lX (0x%08lX) sectors:\n", sd_info->num_sectors, end);
 
     printf("FAT32:   0x%08lX->0x%08lX\n", fat_base, fat_base + fat_sectors);
     printf("MLC:     0x%08lX->0x%08lX\n", mlc_base, mlc_base + mlc_sectors);
