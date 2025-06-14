@@ -1104,5 +1104,3 @@ const sdmmc_device_context_t* mlc_get_card_info(void) {
     // If card.inserted is false, fields in card_info might be zero/default.
     return &card;
 }
-
-[end of source/mlc.c]
