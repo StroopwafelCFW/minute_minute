@@ -2445,4 +2445,3 @@ void dump_logs_redslc(void){
 #endif // FASTBOOT
 #endif // MINUTE_BOOT1
 
-[end of source/dump.c]

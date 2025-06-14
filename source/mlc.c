@@ -1105,4 +1105,3 @@ const sdmmc_device_context_t* mlc_get_card_info(void) {
     return &card;
 }
 
-[end of source/mlc.c]
