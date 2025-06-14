@@ -851,24 +851,6 @@ int sdcard_wait_data(void)
     return 0;
 }
 
-int sdcard_get_sectors(void)
-{
-    if (card.inserted == 0) {
-        printf("sdcard: READ: no card inserted.\n");
-        return -1;
-    }
-
-    if (card.new_card == 1) {
-        printf("sdcard: new card inserted but not acknowledged yet.\n");
-        return -1;
-    }
-
-//  sdhc_error(sdhci->reg_base, "num sectors = %u", sdhci->num_sectors);
-
-    return card.card_info.num_sectors;
-}
-*/ // Removing sdcard_get_sectors
-
 // Unified accessor function implementation
 const sdmmc_device_context_t* sdcard_get_card_info(void) { // Renamed return type
     // Assumes sdcard_init has been called, which calls sdcard_needs_discover.

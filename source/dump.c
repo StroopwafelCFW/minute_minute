@@ -155,7 +155,7 @@ const char* _dump_sata_type_str(int type)
     }
 }
 
-static void print_sdmmc_card_info(const sdmmc_card_info_t* card_info, const char* device_name) {
+static void print_sdmmc_card_info(const sdmmc_device_context_t* card_info, const char* device_name) { // Type updated
     if (!card_info) {
         printf("%s: Error retrieving card data.\n", device_name);
         return;
@@ -253,7 +253,7 @@ void mlc_print_info_menu(void)
         return;
     }
 
-    const sdmmc_card_info_t* info = mlc_get_card_info();
+    const sdmmc_device_context_t* info = mlc_get_card_info(); // Type updated
     // print_sdmmc_card_info handles NULL info check internally
     print_sdmmc_card_info(info, "MLC");
 
@@ -266,7 +266,7 @@ void dump_menu_show()
 }
 
 static u32 dump_get_iosu_mlc_sectors(void){
-    const sdmmc_card_info_t* mlc_info = mlc_get_card_info();
+    const sdmmc_device_context_t* mlc_info = mlc_get_card_info(); // Type updated
     if (!mlc_info) return (u32)-1; // Error if no info
     u32 sectors = mlc_info->num_sectors;
     // if(sectors == -1) // num_sectors is u32, so -1 check is not typical here unless an error val

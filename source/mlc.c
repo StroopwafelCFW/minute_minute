@@ -38,9 +38,9 @@ static int mlcdebug = 3;
 static struct sdhc_host mlc_host;
 static bool initialized = false;
 
-// struct mlc_ctx removed, using sdmmc_device_context_t directly
-
-static sdmmc_device_context_t card; // Changed type here
+// struct mlc_ctx has been removed.
+// The static 'card' variable is now of type sdmmc_device_context_t.
+static sdmmc_device_context_t card;
 
 void mlc_attach(sdmmc_chipset_handle_t handle)
 {
@@ -952,41 +952,6 @@ int mlc_wait_data(void)
     return 0;
 }
 
-u32 mlc_get_sectors(void)
-{
-    if (card.inserted == 0) {
-        printf("mlc: READ: no card inserted.\n");
-        return -1;
-    }
-
-    if (card.new_card == 1) {
-        printf("mlc: new card inserted but not acknowledged yet.\n");
-        return -1;
-    }
-
-//  sdhc_error(sdhci->reg_base, "num sectors = %u", sdhci->num_sectors);
-
-    return card.num_sectors;
-}
-
-// This function is no longer needed as mlc_get_card_info().num_sectors is used
-// u32 mlc_get_sectors(void)
-// {
-//     if (card.inserted == 0) {
-//         printf("mlc: READ: no card inserted.\n");
-//         return -1;
-//     }
-//
-//     if (card.new_card == 1) {
-//         printf("mlc: new card inserted but not acknowledged yet.\n");
-//         return -1;
-//     }
-//
-// //  sdhc_error(sdhci->reg_base, "num sectors = %u", sdhci->num_sectors);
-//
-//     return card.card_info.num_sectors;
-// }
-
 void mlc_irq(void)
 {
     sdhc_intr(&mlc_host);
@@ -1126,9 +1091,9 @@ void mlc_exit(void)
 }
 
 // Unified accessor function implementation
-const sdmmc_card_info_t* mlc_get_card_info(void) {
+const sdmmc_device_context_t* mlc_get_card_info(void) {
     // Basic check: if card not inserted or discovered, might return invalid data
     // but mlc_print_info_menu will call mlc_init first.
     // If card.inserted is false, fields in card_info might be zero/default.
-    return &card; // Return direct pointer to the static card context
+    return &card;
 }
