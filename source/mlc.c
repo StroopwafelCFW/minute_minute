@@ -952,6 +952,8 @@ int mlc_wait_data(void)
     return 0;
 }
 
+// mlc_get_sectors function entirely removed.
+
 void mlc_irq(void)
 {
     sdhc_intr(&mlc_host);
@@ -1022,14 +1024,19 @@ int mlc_erase(void){
 #ifndef MLC_SUPPORT_WRITE
     return -1;
 #else
-    u32 size = mlc_get_sectors();
+    const sdmmc_device_context_t* info = mlc_get_card_info();
+    if (!info) {
+        printf("ERROR: Could not get MLC info for erase.\n");
+        return -1;
+    }
+    u32 size = info->num_sectors;
     if(!size){
         printf("ERROR mlc has 0 bytes");
         return -3;
     }
 
-    if(size==-1){
-        printf("ERROR mlc not detected");
+    if(size==(u32)-1){ // Check if size is effectively an error code from a failed get_sectors
+        printf("ERROR mlc not detected or size invalid\n");
         return -4;
     }
 
@@ -1097,3 +1104,5 @@ const sdmmc_device_context_t* mlc_get_card_info(void) {
     // If card.inserted is false, fields in card_info might be zero/default.
     return &card;
 }
+
+[end of source/mlc.c]

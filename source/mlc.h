@@ -28,7 +28,6 @@ int mlc_wait_data(void);
 int mlc_select(void);
 int mlc_check_card(void);
 int mlc_ack_card(void);
-// u32 mlc_get_sectors(void); // Replaced by mlc_get_card_info()
 
 int mlc_read(u32 blk_start, u32 blk_count, void *data);
 int mlc_write(u32 blk_start, u32 blk_count, void *data);

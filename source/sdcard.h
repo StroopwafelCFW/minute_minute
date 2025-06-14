@@ -27,7 +27,6 @@ int sdcard_wait_data(void);
 int sdcard_select(void);
 int sdcard_check_card(void);
 int sdcard_ack_card(void);
-// int sdcard_get_sectors(void); // Replaced by sdcard_get_card_info
 const sdmmc_device_context_t* sdcard_get_card_info(void);
 
 int sdcard_read(u32 blk_start, u32 blk_count, void *data);
