@@ -148,7 +148,7 @@ DRESULT disk_ioctl (
     }
 
     if (cmd == GET_SECTOR_COUNT) {
-        int sectors = sdcard_get_sectors();
+        int sectors = sdcard_get_card_info()->num_sectors;
         if(sectors < 0) return RES_ERROR;
         *(u32*)buff = sectors;
         return RES_OK;
