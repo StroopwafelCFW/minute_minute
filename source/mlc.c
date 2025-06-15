@@ -161,14 +161,14 @@ static void _discover_emmc(void){
 
     u8 *csd_bytes = (u8 *)cmd.c_resp;
     unsigned int taac, nsac, read_bl_len, c_size, c_size_mult;
-    taac = csd_bytes[13];
-    nsac = csd_bytes[12];
-    read_bl_len = csd_bytes[9] & 0xF;
-    c_size = (csd_bytes[8] & 3) << 10;
-    c_size |= (csd_bytes[7] << 2);
-    c_size |= (csd_bytes[6] >> 6);
-    c_size_mult = (csd_bytes[5] & 3) << 1;
-    c_size_mult |= csd_bytes[4] >> 7;
+    taac = csd_bytes[2];
+    nsac = csd_bytes[3];
+    read_bl_len = csd_bytes[6] & 0xF;
+    c_size = (csd_bytes[7] & 3) << 10;
+    c_size |= (csd_bytes[8] << 2);
+    c_size |= (csd_bytes[9] >> 6);
+    c_size_mult = (csd_bytes[10] & 3) << 1;
+    c_size_mult |= csd_bytes[11] >> 7;
     printf("taac=%u nsac=%u read_bl_len=%u c_size=%u c_size_mult=%u card size=%u bytes\n",
         taac, nsac, read_bl_len, c_size, c_size_mult, (c_size + 1) * (4 << c_size_mult) * (1 << read_bl_len));
     card.num_sectors = (c_size + 1) * (4 << c_size_mult) * (1 << read_bl_len) / 512;

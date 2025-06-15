@@ -155,7 +155,7 @@ const char* _dump_sata_type_str(int type)
     }
 }
 
-static const char* getSDManufacturerName(u16 mid) {
+static const char* get_sd_manufacturer_name(u16 mid) {
     switch (mid) {
         case 0x01: return "Panasonic";
         case 0x02: return "Toshiba/Kingston/Viking";
@@ -184,7 +184,7 @@ static const char* getSDManufacturerName(u16 mid) {
     }
 }
 
-static const char* getEMMCManufacturerName(u16 mid) {
+static const char* get_emmc_manufacturer_name(u16 mid) {
     switch (mid) {
         case 0x11: return "Toshiba";
         case 0x15: return "Samsung";
@@ -199,57 +199,58 @@ static void print_sdmmc_card_info(const sdmmc_device_context_t* card_info, const
         return;
     }
 
+    const bool is_sd = card_info->is_sd;
+    // big endian
+    const u8 *cid = card_info->cid;
+    const u8 mid = cid[14];
     printf("%s Information\n\n", device_name);
-    printf("Type: %s\n", card_info->is_sd ? "SD Card" : "eMMC");
+    printf("Type: %s\n", is_sd ? "SD Card" : cid[13]&1?"eMMC":"MMC");
 
-    // CID Parsing (using specified, potentially non-standard, byte indices)
-    // MID: card_info->cid[14]
-    u8 mid = card_info->cid[14];
-    const char *manufacturer_name = card_info->is_sd?getSDManufacturerName(mid):getEMMCManufacturerName(mid);
+    const char *manufacturer_name = is_sd?get_sd_manufacturer_name(mid):get_emmc_manufacturer_name(mid);
     printf("Manufacturer ID (MID): 0x%02X (%s)\n", mid, manufacturer_name);
 
-    // OID: (card_info->cid[13] << 8) | card_info->cid[12]
-    u16 oid = (card_info->cid[13] << 8) | card_info->cid[12];
+    u16 oid = cid[12] | ((u16)cid[13] << 8);
     // Printing OID as hex and attempting char conversion.
     // ASCII check for individual bytes:
-    char oid_char1 = (card_info->cid[13] >= 32 && card_info->cid[13] <= 126) ? card_info->cid[13] : '.';
-    char oid_char2 = (card_info->cid[12] >= 32 && card_info->cid[12] <= 126) ? card_info->cid[12] : '.';
+    char oid_char1 = (cid[13] >= 32 && cid[13] <= 126) ? cid[13] : '.';
+    char oid_char2 = (cid[12] >= 32 && cid[12] <= 126) ? cid[12] : '.';
     printf("OEM/Application ID (OID): 0x%04X (%c%c)\n", oid, oid_char1, oid_char2);
 
     // PNM: card_info->cid[11] down to card_info->cid[6] (6 chars)
-    char pnm_str[7];
-    pnm_str[0] = card_info->cid[11];
-    pnm_str[1] = card_info->cid[10];
-    pnm_str[2] = card_info->cid[9];
-    pnm_str[3] = card_info->cid[8];
-    pnm_str[4] = card_info->cid[7];
-    pnm_str[5] = card_info->cid[6];
-    pnm_str[6] = '\0';
-    for(int i=0; i<6; i++) { // Filter non-printable characters
+    char pnm_str[] = { cid[11], cid[10], cid[9], cid[8], cid[7], 0, 0 };
+    if(!is_sd)
+        pnm_str[5] = cid[6];
+    for(int i=0; pnm_str[i]; i++) { // Filter non-printable characters
         if (pnm_str[i] < 32 || pnm_str[i] > 126) pnm_str[i] = '.';
     }
     printf("Product Name (PNM): %s\n", pnm_str);
 
     // PRV: card_info->cid[3] (upper nibble major, lower nibble minor)
-    u8 prv_byte = card_info->cid[3];
+    u8 prv_byte = cid[is_sd?6:5];
     int prv_major = (prv_byte >> 4) & 0x0F;
     int prv_minor = prv_byte & 0x0F;
     printf("Product Revision (PRV): %d.%d\n", prv_major, prv_minor);
 
-    // PSN: print raw hex of card_info->cid[2], card_info->cid[1], card_info->cid[0], card_info->cid[15]
-    printf("Product Serial Number (PSN) raw bytes [3:6]: 0x%02X%02X%02X%02X\n",
-           card_info->cid[3], card_info->cid[4], card_info->cid[5], card_info->cid[6]);
+    size_t psn_off = is_sd?5:4;
+    printf("Product Serial Number (PSN) raw bytes: 0x%02X%02X%02X%02X\n", 
+            cid[psn_off], cid[psn_off-1], cid[psn_off-2], cid[psn_off-3]);
 
-    if(!card_info->is_sd){
-        u8 mdt_month = (card_info->cid[14] >> 4) & 0xf;
-        u8 mdt_year_offset = card_info->cid[14] & 0xf;
-        u32 mdt_year = 1997 + mdt_year_offset;
+    u8 mdt_month, mdt_year_offset;
+    u16 mdt_year;
+    if(card_info->is_sd){
+        mdt_month = cid[0] & 0xf;
+        mdt_year_offset = (cid[0] >> 4) | (cid[1] << 4);
+        mdt_year = 2000 + mdt_year_offset;
+    } else {
+        mdt_month = cid[0] >> 4;
+        mdt_year_offset = cid[0] & 0xf;
+        mdt_year = 1997 + mdt_year_offset;
         if(mdt_year < 2005)
             mdt_year += 0x10;
-        printf("Manufacturing Date (MDT from cid[14]): %02d/%04d (Year offset: %d)\n", mdt_month, mdt_year, mdt_year_offset);
-        if (mdt_month == 0 || mdt_month > 12) {
-            printf(" (Warning: Invalid MDT month from cid[14])\n");
-        }
+    }
+    printf("Manufacturing Date: %02d/%04d (Year offset: %d)\n", mdt_month, mdt_year, mdt_year_offset);
+    if (mdt_month == 0 || mdt_month > 12) {
+        printf(" (Warning: Invalid MDT month from cid[14])\n");
     }
 
     // Card Size
@@ -262,14 +263,14 @@ static void print_sdmmc_card_info(const sdmmc_device_context_t* card_info, const
         printf("Size: Unknown (0 sectors reported)\n");
     }
 
-    printf("Raw CID (16 bytes): ");
-    for (int i = 0; i < 16; i++) {
+    printf("Raw CID (15 bytes): ");
+    for (int i = 14; i >= 0; i--) {
         printf("%02X ", card_info->cid[i]);
     }
     printf("\n");
 
-    printf("Raw CSD (16 bytes): ");
-    for (int i = 0; i < 16; i++) {
+    printf("Raw CSD (15 bytes): ");
+    for (int i = 14; i >= 0; i--) {
         printf("%02X ", card_info->csd[i]);
     }
     printf("\n");
