@@ -30,11 +30,15 @@
 #include "ancast.h"
 #include "seeprom.h"
 #include "crc32.h"
-#include "mbr.h"
+#include "menu.hh"
 #include "rednand.h"
 #include "ppc.h"
-
 #include "ff.h"
+#include "stdio.h" // Already included via utils.h or types.h, but explicit is fine
+#include "string.h" // Already included via utils.h or types.h, but explicit is fine
+#include "malloc.h" // Already included via stdlib.h, but explicit is fine
+
+// #include "ff.h" // Already included above, ensure it's only once if not protected by include guards
 
 #include "smc.h"
 #include "crypto.h"
@@ -63,6 +67,266 @@ void dump_print_mlc_info_menu(void);
 
 static u8 nand_page_buf[PAGE_SIZE + PAGE_SPARE_SIZE] ALIGNED(NAND_DATA_ALIGN);
 static u8 nand_ecc_buf[ECC_BUFFER_ALLOC] ALIGNED(NAND_DATA_ALIGN);
+
+static void dump_mlc_raw_to_files_menu_caller(void) {
+    gfx_clear(GFX_ALL, BLACK);
+    printf_("Dumping MLC to SD card files...\n");
+    printf_("This will create multiple ~4GB files in:\n");
+    const char* dump_path = "sdmc:/wiiu/backups/mlc";
+    printf_("%s\n\n", dump_path);
+    printf_("Ensure you have enough free space.\nPress POWER to cancel, or EJECT to start.\n");
+
+    smc_get_events(); // Clear any pending events
+    u32 smc_event = 0;
+    while (!(smc_event & (SMC_EVENT_EJECT | SMC_EVENT_POWER))) {
+        // Yield or sleep briefly if possible, to avoid busy-waiting too hard
+        // usleep(10000); // Example: sleep 10ms, if usleep is available and suitable
+        smc_event = smc_get_events();
+    }
+
+    if (smc_event & SMC_EVENT_POWER) {
+        printf_("MLC dump to files cancelled by user.\n");
+        console_power_or_eject_to_return();
+        return;
+    }
+
+    // User pressed Eject, proceed with dump
+    printf_("Starting dump...\n");
+
+    // The path "sdmc:/wiiu/backups/mlc" implies "sdmc:/wiiu/" and "sdmc:/wiiu/backups/" must exist.
+    // f_mkdir in dump_mlc_raw_to_sd_files only creates the final 'mlc' directory.
+    // We should ensure parent directories are also created here or rely on user to do so.
+    // For simplicity, let's try to create them.
+    f_mkdir("sdmc:/wiiu"); // Ignore result, may already exist
+    f_mkdir("sdmc:/wiiu/backups"); // Ignore result, may already exist
+
+    int result = dump_mlc_raw_to_sd_files(dump_path);
+
+    if (result == 0) {
+        printf_("MLC dump to files completed successfully!\n");
+    } else {
+        printf_("MLC dump to files failed. Error code: %d\n", result);
+    }
+    console_power_or_eject_to_return();
+}
+
+// Function to be inserted
+static int dump_mlc_raw_to_sd_files(const char* base_path) {
+    // Constants for file splitting
+    const uint64_t MAX_FILE_SIZE_BYTES = (4 * 1024 * 1024 * 1024ULL - (uint64_t)SDMMC_DEFAULT_BLOCKLEN * SDHC_BLOCK_COUNT_MAX * 2);
+    const uint32_t BYTES_PER_SECTOR = SDMMC_DEFAULT_BLOCKLEN;
+
+    if (mlc_init() != 0) {
+        printf_("MLC initialization failed\n");
+        return -1;
+    }
+
+    int32_t mlc_sectors = dump_get_iosu_mlc_sectors();
+    if (mlc_sectors <= 0) {
+        printf_("Failed to get MLC size or MLC size is 0 sectors\n");
+        return -2;
+    }
+
+    uint64_t total_bytes_to_dump = (uint64_t)mlc_sectors * BYTES_PER_SECTOR;
+    uint32_t bytes_per_chunk = SDMMC_DEFAULT_BLOCKLEN * SDHC_BLOCK_COUNT_MAX;
+     if (bytes_per_chunk == 0) {
+        printf_("Error: bytes_per_chunk is zero (SDHC_BLOCK_COUNT_MAX possibly 0).\n");
+        return -2; // Invalid configuration
+    }
+
+
+    uint8_t *sector_buf1 = memalign(0x40, bytes_per_chunk);
+    uint8_t *sector_buf2 = memalign(0x40, bytes_per_chunk);
+
+    if (!sector_buf1 || !sector_buf2) {
+        printf_("Failed to allocate buffers (%u bytes each)\n", bytes_per_chunk);
+        if (sector_buf1) free(sector_buf1);
+        if (sector_buf2) free(sector_buf2);
+        return -3;
+    }
+
+    FIL current_file;
+    char file_path[256];
+    int file_part_number = 0;
+    uint64_t bytes_written_to_current_file = 0;
+    FRESULT res;
+
+    res = f_mkdir(base_path);
+    if (res != FR_OK && res != FR_EXIST) {
+        printf_("Failed to create directory %s: error %d\n", base_path, res);
+        free(sector_buf1);
+        free(sector_buf2);
+        return -4;
+    }
+
+    uint8_t *current_mlc_read_target_buf = sector_buf1; // Buffer where MLC data is read into
+    uint8_t *current_sd_write_source_buf = sector_buf2; // Buffer from which SD data is written
+
+    uint64_t current_mlc_sector_processed = 0; // Tracks sectors whose data has been WRITTEN to SD
+    uint64_t next_mlc_sector_to_read = 0;    // Tracks next sector to START READING from MLC
+    uint64_t total_bytes_successfully_written = 0;
+    UINT actual_bytes_written_f_write = 0;
+
+    struct sdmmc_command mlc_async_cmd_obj;
+    bool mlc_read_is_pending = false;
+    int final_return_code = 0;
+
+    gfx_clear_color(BLACK, BLACK);
+    enable_screens(GFX_TOP, GFX_BOTTOM, true);
+    printf_("Starting MLC dump to %s/mlc.partXX\n", base_path);
+    printf_("Total size: %llu bytes (~%llu MiB), %ld sectors\n", total_bytes_to_dump, total_bytes_to_dump / (1024*1024), mlc_sectors);
+    printf_("Max part size: ~%llu MiB. Chunk size: %u KiB.\n", MAX_FILE_SIZE_BYTES / (1024*1024), bytes_per_chunk / 1024);
+
+    // Priming read: Fill one buffer (current_mlc_read_target_buf) synchronously first.
+    uint32_t sectors_for_priming_read = 0;
+    if (total_bytes_to_dump > 0) {
+        sectors_for_priming_read = (total_bytes_to_dump < bytes_per_chunk) ? \
+                                   (uint32_t)((total_bytes_to_dump + BYTES_PER_SECTOR -1) / BYTES_PER_SECTOR) : \
+                                   (bytes_per_chunk / BYTES_PER_SECTOR);
+        if (sectors_for_priming_read > mlc_sectors) sectors_for_priming_read = mlc_sectors;
+
+        if (mlc_read(next_mlc_sector_to_read, sectors_for_priming_read, current_mlc_read_target_buf) != 0) {
+            printf_("Initial MLC read failed for %u sectors at offset %llu.\n", sectors_for_priming_read, next_mlc_sector_to_read);
+            final_return_code = -5;
+            goto cleanup_and_return;
+        }
+        next_mlc_sector_to_read += sectors_for_priming_read;
+    } else { // Nothing to dump
+        final_return_code = 0;
+        goto cleanup_and_return;
+    }
+
+    // Main loop: continues as long as not all READ data has been WRITTEN
+    while (total_bytes_successfully_written < total_bytes_to_dump) {
+        // Swap buffers: the buffer just filled by MLC (or priming read) becomes the source for SD write.
+        // The buffer that was just used as source for SD write becomes the target for next MLC read.
+        uint8_t *temp_swap = current_sd_write_source_buf;
+        current_sd_write_source_buf = current_mlc_read_target_buf;
+        current_mlc_read_target_buf = temp_swap;
+
+        uint64_t bytes_to_process_in_this_iteration = (uint64_t)sectors_for_priming_read * BYTES_PER_SECTOR; // Default for first pass
+        if (total_bytes_successfully_written > 0) { // For subsequent iterations, it's what the async read got
+            bytes_to_process_in_this_iteration = (uint64_t)mlc_async_cmd_obj.num_blocks * BYTES_PER_SECTOR;
+        }
+         // Ensure we don't try to process more than remaining total
+        if (total_bytes_successfully_written + bytes_to_process_in_this_iteration > total_bytes_to_dump) {
+            bytes_to_process_in_this_iteration = total_bytes_to_dump - total_bytes_successfully_written;
+        }
+
+
+        // Start next asynchronous MLC read if there are more sectors to fetch
+        if (next_mlc_sector_to_read < mlc_sectors) {
+            uint64_t remaining_mlc_sectors_overall = mlc_sectors - next_mlc_sector_to_read;
+            uint32_t sectors_for_async_read = (remaining_mlc_sectors_overall < (bytes_per_chunk / BYTES_PER_SECTOR)) ? \
+                                               (uint32_t)remaining_mlc_sectors_overall : \
+                                               (bytes_per_chunk / BYTES_PER_SECTOR);
+            if (sectors_for_async_read > 0) {
+                if (mlc_start_read(next_mlc_sector_to_read, sectors_for_async_read, current_mlc_read_target_buf, &mlc_async_cmd_obj) == 0) {
+                    mlc_read_is_pending = true;
+                } else {
+                    printf_("Async MLC read start failed at sector %llu.\n", next_mlc_sector_to_read);
+                    final_return_code = -6; // Error, but try to write out what's in current_sd_write_source_buf
+                }
+            }
+        }
+
+        // Write data from current_sd_write_source_buf
+        uint64_t bytes_remaining_in_current_sd_buffer = bytes_to_process_in_this_iteration;
+        while (bytes_remaining_in_current_sd_buffer > 0) {
+            if (bytes_written_to_current_file == 0) { // Open new file part
+                sprintf(file_path, "%s/mlc.part%02d", base_path, file_part_number);
+                res = f_open(&current_file, file_path, FA_CREATE_ALWAYS | FA_WRITE);
+                if (res != FR_OK) {
+                    printf_("Failed to open %s: err %d\n", file_path, res);
+                    if (mlc_read_is_pending) mlc_end_read(&mlc_async_cmd_obj);
+                    final_return_code = -7;
+                    goto cleanup_and_return;
+                }
+            }
+
+            uint32_t bytes_to_write_for_this_f_write = (uint32_t)bytes_remaining_in_current_sd_buffer;
+            if (bytes_written_to_current_file + bytes_to_write_for_this_f_write > MAX_FILE_SIZE_BYTES) {
+                bytes_to_write_for_this_f_write = (uint32_t)(MAX_FILE_SIZE_BYTES - bytes_written_to_current_file);
+            }
+
+            res = f_write(&current_file,
+                          current_sd_write_source_buf + (bytes_to_process_in_this_iteration - bytes_remaining_in_current_sd_buffer),
+                          bytes_to_write_for_this_f_write,
+                          &actual_bytes_written_f_write);
+
+            if (res != FR_OK || actual_bytes_written_f_write != bytes_to_write_for_this_f_write) {
+                printf_("f_write failed for %s: err %d, wrote %u/%u\n", file_path, res, actual_bytes_written_f_write, bytes_to_write_for_this_f_write);
+                if (mlc_read_is_pending) mlc_end_read(&mlc_async_cmd_obj);
+                f_close(&current_file);
+                final_return_code = -8;
+                goto cleanup_and_return;
+            }
+
+            total_bytes_successfully_written += actual_bytes_written_f_write;
+            bytes_written_to_current_file += actual_bytes_written_f_write;
+            bytes_remaining_in_current_sd_buffer -= actual_bytes_written_f_write;
+            current_mlc_sector_processed += actual_bytes_written_f_write / BYTES_PER_SECTOR;
+
+
+            if (bytes_written_to_current_file >= MAX_FILE_SIZE_BYTES) {
+                if (f_close(&current_file) != FR_OK) printf_("Warning: Failed to close %s (err %d)\n", file_path, res);
+                file_part_number++;
+                bytes_written_to_current_file = 0;
+            }
+        }
+
+        // If async read start failed earlier, and we've written the current buffer, abort.
+        if (final_return_code == -6) goto cleanup_and_return;
+
+        // Wait for the pending MLC read operation to complete
+        if (mlc_read_is_pending) {
+            if (mlc_end_read(&mlc_async_cmd_obj) != 0) {
+                printf_("Async MLC read end failed (target sector %llu).\n", next_mlc_sector_to_read);
+                final_return_code = -9; // Data for next write might be corrupt
+                goto cleanup_and_return;
+            }
+            next_mlc_sector_to_read += mlc_async_cmd_obj.num_blocks;
+            sectors_for_priming_read = mlc_async_cmd_obj.num_blocks; // For next iteration's bytes_to_process calc
+            mlc_read_is_pending = false;
+        } else if (next_mlc_sector_to_read >= mlc_sectors && total_bytes_successfully_written < total_bytes_to_dump) {
+            // No more reads were started because we thought we got all sectors, but not all bytes written.
+            // This case should ideally not be hit if logic is perfect.
+        }
+
+        printf_("\rDumped: %llu / %llu MiB (%.1f%%) Part %02d",
+               total_bytes_successfully_written / (1024 * 1024), total_bytes_to_dump / (1024 * 1024),
+               (double)total_bytes_successfully_written * 100.0 / total_bytes_to_dump,
+               file_part_number);
+    }
+
+cleanup_and_return:
+    if (bytes_written_to_current_file > 0 && file_part_number >=0 ) { // If a file was open and being written to
+        // Check if current_file has a valid descriptor before closing, e.g. by checking if f_open succeeded previously
+        // For simplicity, just attempt close if bytes_written > 0 for current part.
+        printf_("\nClosing current/final file: %s\n", file_path);
+        if (f_close(&current_file) != FR_OK) {
+            printf_("Error closing file %s.\n", file_path);
+            if (final_return_code == 0) final_return_code = -10;
+        }
+    }
+
+    if (mlc_read_is_pending) { // Safeguard
+        printf_("Warning: MLC read op still pending at exit. Attempting to finalize.\n");
+        mlc_end_read(&mlc_async_cmd_obj);
+    }
+
+    free(sector_buf1);
+    free(sector_buf2);
+
+    if (final_return_code == 0 && total_bytes_successfully_written == total_bytes_to_dump) {
+        printf_("\nMLC dump completed successfully.\nTotal bytes dumped: %llu\n", total_bytes_successfully_written);
+    } else {
+        printf_("\nMLC dump failed or incomplete. Final Code: %d\n", final_return_code);
+        printf_("Total bytes successfully written: %llu / %llu\n", total_bytes_successfully_written, total_bytes_to_dump);
+    }
+    return final_return_code;
+}
+
 
 menu menu_dump = {
     "minute", // title
@@ -99,9 +363,10 @@ menu menu_dump = {
             {"Test SLC and Restore SLC.RAW", &dump_restore_test_slc_raw},
             {"Print SLC superblocks", &dump_print_slc_superblocks},
             {"Print MLC Info", &dump_print_mlc_info_menu},
+            {"Dump MLC to files (RAW)", &dump_mlc_raw_to_files_menu_caller},
             {"Return to Main Menu", &menu_close},
     },
-    29, // number of options
+    30, // number of options
     0,
     0
 };
