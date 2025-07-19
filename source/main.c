@@ -961,6 +961,8 @@ u32 _main(void *base)
             printf("No SD Card found, autobooting SLC\n");
             autoboot = 1;
         }
+    } else {
+        sdcard_init();
     }
 #endif
     //isfs_test();
@@ -1005,6 +1007,10 @@ u32 _main(void *base)
                 // Don't wait in ECO mode or IOSU reload.
                 if (no_menu) break;
 
+                if (sdcard_check_card() != SDMMC_NO_CARD) {
+                    sdcard_init();
+                }
+
                 // Get input at .1s intervals.
                 u8 input = smc_get_events();
                 udelay(100000);
@@ -1038,6 +1044,20 @@ u32 _main(void *base)
         enable_display();
         printf("Showing menu...\n");
         menu_init(&menu_main);
+
+        while(true) {
+            if (sdcard_check_card() != SDMMC_NO_CARD) {
+                sdcard_init();
+            }
+            u8 input = smc_get_events();
+            if (input & SMC_EJECT_BUTTON) {
+                menu_main.option[menu_main.selected].callback();
+                break;
+            }
+            if (input & SMC_POWER_BUTTON) {
+                menu_next_selection(&menu_main);
+            }
+        }
 
         smc_get_events();
         smc_set_odd_power(true);
