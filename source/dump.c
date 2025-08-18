@@ -44,6 +44,7 @@
 
 extern seeprom_t seeprom;
 extern otp_t otp;
+extern bool main_loaded_from_ptb;
 
 extern void boot1_prshhax_payload(void);
 extern void boot1_prshhax_payload_end(void);
@@ -1319,11 +1320,11 @@ int _dump_restore_slc_raw(u32 bank, int boot1_only, bool nand_test)
     switch(bank) {
         case NAND_BANK_SLC: name = "SLC";
         isfs_init(ISFSVOL_SLC);
-        if(!isfs_slc_has_isfshax_installed() && !crypto_otp_is_de_Fused){
+        if(!isfs_slc_has_isfshax_installed() && !crypto_otp_is_de_Fused && !main_loaded_from_ptb && !boot1_only){
             printf("SLC Restore not allowed!\nNeither ISFShax nor defuse is detected\nSLC restore could brick the consolse.\n");
             return -5;
         } 
-        if(!crypto_otp_is_de_Fused){
+        if(!crypto_otp_is_de_Fused && !main_loaded_from_ptb){
             printf("Defuse not detected. boot1 and ISFShax superblocks will be protected during restore\nISFShax Superblocks: ");
             ctx = isfs_get_volume(ISFSVOL_SLC);
             for(int i = 0; i<ISFSHAX_REDUNDANCY; i++)
