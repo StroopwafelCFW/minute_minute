@@ -202,6 +202,9 @@ boot_info_t *init_prsh_get_bootinfo(void) {
     return NULL;
 }
 
+/**
+ * @brief main function for minute boot1
+ */
 u32 _main(void *base)
 {
     (void)base;
@@ -477,6 +480,12 @@ u32 _main(void *base)
     bool slc_mounted = false;
 
 #ifdef ISFSHAX_STAGE2
+    crypto_decrypt_seeprom();
+    //enable ODD Power on for HDDs to give them time to spin up
+    if (seeprom.bc.sata_device != SATA_TYPE_GEN2HDD &&
+        seeprom.bc.sata_device != SATA_TYPE_GEN1HDD)
+        smc_set_odd_power(true);
+
     //Skip ISFS boot by pressing power
     if (!(smc_get_events() & SMC_POWER_BUTTON && !(pflags_val & (CMPT_RETSTAT0|CMPT_RETSTAT1)))) {
         serial_send_u32(0x5D4D0001);
@@ -644,6 +653,9 @@ static void error_wait(char *message){
     console_power_to_continue();
 }
 
+/**
+ * @brief main function for full minute
+ */
 u32 _main(void *base)
 {
     (void)base;
