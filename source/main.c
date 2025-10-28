@@ -482,8 +482,8 @@ u32 _main(void *base)
 #ifdef ISFSHAX_STAGE2
     crypto_decrypt_seeprom();
     //enable ODD Power on for HDDs to give them time to spin up
-    if (seeprom.bc.sata_device != SATA_TYPE_GEN2HDD &&
-        seeprom.bc.sata_device != SATA_TYPE_GEN1HDD)
+    if (seeprom.bc.sata_device == SATA_TYPE_GEN2HDD ||
+        seeprom.bc.sata_device == SATA_TYPE_GEN1HDD)
         smc_set_odd_power(true);
 
     //Skip ISFS boot by pressing power
