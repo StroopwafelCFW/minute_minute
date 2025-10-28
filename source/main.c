@@ -1042,7 +1042,8 @@ u32 _main(void *base)
         menu_init(&menu_main);
 
         smc_get_events();
-        smc_set_odd_power(true);
+        if(is_iosu_reload)
+            smc_set_odd_power(true);
     }
 #endif // !FASTBOOT
 
