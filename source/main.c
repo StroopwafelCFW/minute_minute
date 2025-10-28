@@ -467,9 +467,6 @@ u32 _main(void *base)
     }
     else
     {
-        // Turn on ODDPower via SMC
-        smc_set_odd_power(1);
-
         // Set DcdcPowerControl2 GPIO's state
         gpio_dcdc_pwrcnt2_set(1);
 
