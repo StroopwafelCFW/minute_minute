@@ -203,7 +203,7 @@ void *_main(void *base)
         is_boot1 = 1;
     }
     else {
-        mem_setswap(1);
+        mem_setswap();
     }
 
     if (is_boot1) {
@@ -289,7 +289,7 @@ void *_main(void *base)
     }
 #endif
 
-    disable_boot0(1);
+    disable_boot0();
 
     if (is_boot1) {
         gpio_debug_send(0x89);
