@@ -22,6 +22,7 @@ bool isfshax_search_patch(size_t from, size_t to, const void *search, size_t sea
             return true;
         }
     }
+    printf("Patch location not found!\n");
     return ret;
 }
 
@@ -41,15 +42,18 @@ bool isfshax_patch_apply(u32 fw_img_start){
         return false;
 
     // block updates
+    // @ 0x111c26c
     static const char system_update_url[] = "https://nus.wup.shop.nintendo.net/nus/services/NetUpdateSOAP";
     static const u32 n = 0;
     success = isfshax_search_patch(fw_img_start, end, system_update_url, sizeof(system_update_url), 0, &n, sizeof(n));
     BOOT1_serial(0x8D4D200 + success);
 
+    // @ 0x1bc4e94
     static const char system_update_command[] = "GetSystemUpdate";
     success = isfshax_search_patch(fw_img_start, end, system_update_command, sizeof(system_update_command), 0, &n, sizeof(n));
     BOOT1_serial(0x8D4D300 + success);
 
+    // @ 0x19ac73c and 0x1bf482c
     static const u8 update_check_end[] = { 0xe2, 0x43, 0x30, 0x03, 0xe1, 0x50, 0x00, 0x03, 0x05, 0x9f, 0x00, 0xf0, 0x01, 0x2f, 0xff, 0x1e, 0xe2, 0x83, 0x30, 0x02, 0xe1, 0x50, 0x00, 0x03, 0x0a, 0x00, 0x00, 0x1e };
     static const u32 movr00 = 0xe3a00000;
     success = isfshax_search_patch(fw_img_start, end, update_check_end, sizeof(update_check_end), 8, &movr00, sizeof(movr00));
@@ -57,6 +61,7 @@ bool isfshax_patch_apply(u32 fw_img_start){
 
 
     // just in case prevent SCFM from formatting the slc
+    // @ 0x11e1cb8
     static const u8 scfmFormat[] = { 0xe5, 0x9f, 0x15, 0x40, 0xe5, 0x9f, 0x24, 0xc0, 0xe3, 0xa0, 0x30, 0x00, 0xe5, 0x98, 0x00, 0x00, 0xeb, 0x00, 0x18, 0x8f, 0xe5, 0x9f, 0xe5, 0x30, 0xe5, 0x9f, 0xc5, 0x30, 0xe5, 0x9f, 0x14, 0xe8, 0xe5, 0x9f, 0x23, 0xc4 };
     static const u32 illegal_instruction = 0xFFFFFFFF;
     success = isfshax_search_patch(fw_img_start, end, scfmFormat, sizeof(scfmFormat), 0x10, &illegal_instruction, sizeof(illegal_instruction));
@@ -64,13 +69,15 @@ bool isfshax_patch_apply(u32 fw_img_start){
 
 
     // don't use standby for restart
+    // @ 0x103cbea
     static const u8 reboot_case[] = { 0x4c, 0x2a, 0x23, 0x80, 0x1c, 0x26, 0x36, 0xc8, 0x68, 0x32, 0x03, 0x1b, 0x42, 0x9a, 0xd1, 0x01 };
     static const u16 movr01 = 0x2001;
     success = isfshax_search_patch(fw_img_start, end, reboot_case, sizeof(reboot_case), -10, &movr01, sizeof(movr01));
     BOOT1_serial(0x8D46600 + success);
     printf("Reboot patch: %i\n", success);
 
-    // do full reboot instead of IOSU reload (else patches wouldnÄt be applied)
+    // do full reboot instead of IOSU reload (else patches wouldn't be applied)
+    // @ 0x103c7c0 -> virt 0x0501f578
     static const u8 ios_reload_branch[] = { 0xe0, 0x91, 0x4b, 0xcc, 0x42, 0x9a, 0xd1, 0x00, 0xe1, 0xea };
     static const u16 adds4 = 0x3204;
     success = isfshax_search_patch(fw_img_start, end, ios_reload_branch, sizeof(ios_reload_branch), 0, &adds4, sizeof(adds4));
@@ -78,10 +85,11 @@ bool isfshax_patch_apply(u32 fw_img_start){
     printf("Reload patch: %i\n", success);
 
     // Shutdown properly instead of going to Standby Mode (DRAM on)
+    // 0x103c9ea
     static const u8 shutdown_stuff[] = { 0x23, 0x80, 0x68, 0x10, 0x02, 0x1b, 0x42, 0x98, 0xd0, 0x0a, 0x23, 0xa3, 0x00, 0x9b, 0x58, 0xe3, 0x2b, 0x00, 0xd0, 0x04, 0x68, 0xfa, 0x03, 0xd2, 0xd4, 0x01, 0x20, 0x04, 0xe0, 0x00 };
     success = isfshax_search_patch(fw_img_start, end, shutdown_stuff, sizeof(shutdown_stuff), 26, &movr01, sizeof(movr01));
     BOOT1_serial(0x8D46800 + success);
-    printf("Reboot patch: %i\n", success);
+    printf("Shutdown patch: %i\n", success);
 
     return true; // still boot even if the other patches fail
 }
