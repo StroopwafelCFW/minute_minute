@@ -1084,7 +1084,7 @@ skip_menu:
 
             if(boot.vector) {
 #ifdef FASTBOOT
-                prsh_set_entry("minute_boot", (void*)1, 0);
+                prsh_set_entry("minute_boot", (void*)(minute_on_sd?3:1), 0);
 #else
                 prsh_set_entry("minute_boot", (void*)(menu_main.selected + 1), 0);
 #endif
