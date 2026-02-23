@@ -767,6 +767,15 @@ u32 _main(void *base)
                 // IOSU reload, gpu is already inited by IOSU
                 no_menu = true;
             }
+
+            u32 minute_location;
+            res = prsh_get_entry("minute_location", (void**) &minute_location, NULL);
+            if(!res){
+                printf("minute_location: %X\n", minute_location);
+                minute_on_slc = minute_location & 1;
+                minute_on_sd = !minute_on_slc;
+                use_minute_img = !!(minute_location & 2);
+            }
         }
     }
 
