@@ -1003,6 +1003,8 @@ u32 _main(void *base)
         main_quickboot_patch_slc();
     if(!boot.vector)
         main_quickboot_patch();
+    if(!boot.vector)
+        main_quickboot_isfshax();
 #else
     // Prompt user to skip autoboot, time = 0 will skip this.
     if(autoboot)
