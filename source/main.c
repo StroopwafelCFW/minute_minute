@@ -480,7 +480,6 @@ u32 _main(void *base)
     //Skip ISFS boot by pressing power
     if (!(smc_get_events() & SMC_POWER_BUTTON && !(pflags_val & (CMPT_RETSTAT0|CMPT_RETSTAT1)))) {
         serial_send_u32(0x5D4D0001);
-        printf("Mounting SLC...\n");
         irq_initialize();
         isfs_init(ISFSVOL_SLC);
         slc_mounted = true;
@@ -512,13 +511,21 @@ u32 _main(void *base)
                 serial_send_u32(0x5D4D006);
             }
         }
-        if(!boot.vector) {
-            serial_send_u32(0x5D4D0007);
-            boot.vector = boot1_patch_isfshax();
+    }
+    if(!boot.vector){
+        serial_send_u32(0x5D4D0007);
+        if(!slc_mounted){
+            irq_initialize();
+            isfs_init(ISFSVOL_SLC);
+            slc_mounted = true;
         }
+        boot.vector = boot1_patch_isfshax();
+    }
+    if(slc_mounted){
         isfs_fini();
         irq_shutdown();
         serial_send_u32(0x5D4D0008);
+        slc_mounted = false;
     }
 #endif
 
