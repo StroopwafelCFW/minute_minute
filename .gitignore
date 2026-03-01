@@ -43,6 +43,7 @@ debug/
 debug_boot1/
 debug_isfshax/
 debug_fastboot/
+build/
 # my notes
 dram*.txt
 fat*.txt
