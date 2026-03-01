@@ -161,9 +161,9 @@ static bool load_fw_from_sd_fat(void){
         return *(u32*)ALL_PURPOSE_TMP_BUF == ANCAST_MAGIC;
 }
 
-static u32 load_fw_from_sd(bool retry_forever){
+static u32 load_fw_from_sd(){
     u32 vector = 0;
-    for(int i = 0; !vector && (i<5 || retry_forever); i++)   
+    for(int i = 0; !vector && i<5; i++)   
     {
         if(i==1)
             smc_set_notification_led(LEDRAW_ORANGE_PULSE);
@@ -475,10 +475,12 @@ u32 _main(void *base)
     }
 
     bool slc_mounted = false;
-
+    bool force_fallback = false;
 #ifdef ISFSHAX_STAGE2
+    force_fallback = (smc_get_events() & SMC_POWER_BUTTON && !(pflags_val & (CMPT_RETSTAT0|CMPT_RETSTAT1)));
+
     //Skip ISFS boot by pressing power
-    if (!(smc_get_events() & SMC_POWER_BUTTON && !(pflags_val & (CMPT_RETSTAT0|CMPT_RETSTAT1)))) {
+    if (!force_fallback) {
         serial_send_u32(0x5D4D0001);
         irq_initialize();
         isfs_init(ISFSVOL_SLC);
@@ -489,9 +491,9 @@ u32 _main(void *base)
         serial_send_u32(0x5D4D0004);
     }
 #endif // ISFSHAX_STAGE2
-
-    usb_init(); // needed for SD clock
-    boot.vector = load_fw_from_sd(!slc_mounted);
+    if(!force_fallback) // have a way to force lower SD clock
+        usb_init(); // needed for SD clock
+    boot.vector = load_fw_from_sd();
 
 #ifdef ISFSHAX_STAGE2
     if(slc_mounted){
@@ -527,6 +529,9 @@ u32 _main(void *base)
         serial_send_u32(0x5D4D0008);
         slc_mounted = false;
     }
+
+    while(!boot.vector) // everytging failed... just keep trying...
+        boot.vector = load_fw_from_sd();
 #endif
 
     if(boot.vector){
