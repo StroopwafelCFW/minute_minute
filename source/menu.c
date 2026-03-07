@@ -133,6 +133,12 @@ void menu_draw()
         sprintf(item_buffer, "%c %s %c", selected_char, __menu->option[i].text, selected_char2);
         console_add_text(item_buffer);
     }
+
+    int current_lines = 1 + 1 + __menu->subtitles + 1 + __menu->entries;
+    for (int i = current_lines; i < MAX_LINES - 1; i++) {
+        console_add_text("");
+    }
+    console_add_text(" [POWER] Next  [EJECT] Select");
 }
 
 void menu_show()
