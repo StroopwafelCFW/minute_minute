@@ -549,10 +549,6 @@ int _ppc_dump_bootrom_otp(int delay)
         __asm volatile ("\n");
     }
 
-    // Check reset vector
-    dc_invalidaterange((void*)0x100, sizeof(u32));
-    u32 tmp = read32(0x100);
-
     //ppc_hreset_glitch(spacing);
     ppc_do_sreset();
 
