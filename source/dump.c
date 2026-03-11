@@ -58,6 +58,9 @@ void dump_set_sata_type_5(void);
 void dump_set_sata_type_6(void);
 void dump_set_sata_type_7(void);
 void dump_set_sata_type_8(void);
+static void _dump_delete_scfm(void);
+static void _dump_delete_scfm_slccmpt(void);
+static void _dump_delete_scfm_rednand(void);
 
 // Forward declaration for the menu callback
 void dump_print_mlc_info_menu(void);

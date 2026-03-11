@@ -398,7 +398,6 @@ sdhc_clock_divisor(struct sdhc_host *hp, u_int freq)
 int
 sdhc_bus_clock(struct sdhc_host *hp, int freq, int timing)
 {
-    struct sdmmc_command cmd;
     int div;
     int timo;
     int sdclk;

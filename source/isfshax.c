@@ -100,19 +100,11 @@ int isfshax_refresh(void)
     isfs_load_keys(slc);
 
 
-    int num_rewrite = 0;
-    bool needs_rewrite[ISFSHAX_REDUNDANCY];
-    bool is_good[ISFSHAX_REDUNDANCY];
-    int good_count = 0;
-    bool good_no_rewrite = false;
-
     u32 curindex = boot1_superblock->isfshax.index;
     u8 curslot = boot1_superblock->isfshax.slots[curindex].slot;
-    bool curecc = !!(boot1_superblock->isfshax.slots[curindex].ecc_correctable);
 
     
     u32 newest_gen = boot1_superblock->isfshax.generation;
-    u32 newest_gen_index = curindex;
     u32 rewrite_index = (curindex + 1) % ISFSHAX_REDUNDANCY;
     //u32 rewrite_gen = max(ISFSHAX_GENERATION_FIRST, newest_gen-1)
     bool rewrite_needed = false;
@@ -147,7 +139,6 @@ int isfshax_refresh(void)
 
         if(newest_gen < superblock.isfshax.generation){
             newest_gen = superblock.isfshax.generation;
-            newest_gen_index = index;
         }
     }
 
@@ -229,7 +220,7 @@ void print_isfshax_refresh_error(int isfshax_refresh){
         int badblocks = isfshax_refresh & 0xF;
         int event = isfshax_refresh & ~0xF;
         if(badblocks)
-            printf("WARNING: %d ISFShax superblock are bad\n");
+            printf("WARNING: %d ISFShax superblock are bad\n", badblocks);
         switch (event)
         {
         case ISFSHAX_REWRITE_HAPPENED:

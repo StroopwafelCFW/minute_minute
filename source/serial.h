@@ -15,7 +15,7 @@
 void serial_fatal();
 void serial_force_terminate();
 void serial_send_u32(u32 val);
-int serial_in_read(u8* out);
+int serial_in_read(char* out);
 void serial_poll();
 void serial_allow_zeros();
 void serial_disallow_zeros();

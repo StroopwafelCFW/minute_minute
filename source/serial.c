@@ -73,7 +73,7 @@ void serial_send_u32(u32 val)
     }
 }
 
-int serial_in_read(u8* out) {
+int serial_in_read(char* out) {
     memset(out, 0, sizeof(serial_buffer));
     memcpy(out, serial_buffer, serial_len);
     out[255] = 0;

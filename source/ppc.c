@@ -493,7 +493,6 @@ int _ppc_dump_bootrom_otp(int delay)
 {
     u32 cookie, old;
     u32 safety_exit = 0;
-    u8 exit_code = 0x00;
 
     uintptr_t dump_block = DUMP_BLOCK_ADDR;
     uintptr_t dump_stub_addr = DUMP_STUB_ADDR;
@@ -640,7 +639,7 @@ void ppc_test(u32 val)
 {
     for (int i = 0; i < 0x1000; i++)
     {
-        printf("%08x %08x %08x\n", exi0_read32(0x21000400), rtc_get_ctrl0(), rtc_get_ctrl1());
+        printf("%08lx %08lx %08lx\n", exi0_read32(0x21000400), rtc_get_ctrl0(), rtc_get_ctrl1());
     }
     //ancast_ppc_load("slc:/sys/title/00050010/1000400a/code/kernel.img");
     //memcpy((void*)0x01330000, (void*)0x08000000, 0x11e100);

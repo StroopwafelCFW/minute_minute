@@ -295,9 +295,9 @@ static int apply_ini_config(void){
     }
 
     printf("Rednand Config:\n");
-    printf(" slccmpt: %i\n", rednand.slccmpt.lba_length);
-    printf(" slc: %i\n", rednand.slc.lba_length);
-    printf(" mlc: %i\n", rednand.mlc.lba_length);
+    printf(" slccmpt: %lu\n", rednand.slccmpt.lba_length);
+    printf(" slc: %lu\n", rednand.slc.lba_length);
+    printf(" mlc: %lu\n", rednand.mlc.lba_length);
     printf(" disable scfm: %i\n", rednand.disable_scfm);
     printf(" mlc_nocrypto: %i\n", rednand.mlc_nocrypto);
     printf(" mlc sysmount: %i\n", rednand.sys_mount_mlc);
@@ -329,6 +329,7 @@ static int rednand_load_seeprom(void) {
         redseeprom = NULL;
         return -2;
     }
+    return 0;
 }
 
 static int rednand_load_opt(void){

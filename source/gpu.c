@@ -52,7 +52,7 @@ void gpu_test(void) {
 }
 
 void gpu_switch_endianness(void) {
-    if (read16(MEM_GPU_ENDIANNESS) & 3 == 1)
+    if ((read16(MEM_GPU_ENDIANNESS) & 3) == 1)
         return;
 
     abif_gpu_write32(0x8020, 0xFFFFFFFF);
@@ -109,7 +109,6 @@ void gpu_do_ave_list(ave_init_entry_t* paEntries, u32 len) {
 
 int BSP_60XeDataStreaming_write(int val)
 {
-    int v4; // r6
     int v5; // r4
     unsigned int v6; // r4
     int v7; // r3
@@ -158,11 +157,6 @@ void gpu_display_init(void) {
 
     //gpu_switch_endianness();
     ave_i2c_init(400000, 0);
-
-    int needs_ave_init = 1;
-    if (gpu_tv_primary_surface_addr()) {
-        needs_ave_init = 0;
-    }
 
     //pll_vi1_shutdown_alt();
     //pll_vi2_shutdown();

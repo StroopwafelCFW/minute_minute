@@ -31,7 +31,7 @@ ARCH			:=	-march=armv5te -mcpu=arm926ej-s -marm -mthumb-interwork -mbig-endian -
 
 CFLAGS			:=	-g -std=c11 -Os \
 					-fomit-frame-pointer -fdata-sections -ffunction-sections \
-					$(ARCH) -nostartfiles
+					$(ARCH) -nostartfiles -Wall -Werror
 
 CFLAGS			+=	$(INCLUDE) -D_GNU_SOURCE -DMINUTE_BOOT1 -DISFSHAX_STAGE2 -DMINUTE_HEADLESS -DCAN_HAZ_IRQ -DNAND_WRITE_ENABLED -fno-builtin-printf -Wno-nonnull -Werror=implicit
 

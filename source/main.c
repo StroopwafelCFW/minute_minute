@@ -115,19 +115,19 @@ static bool read_ancast(const char *path){
     if (!f) {
         return false;
     }
-    size_t read = fread((void*)ALL_PURPOSE_TMP_BUF, 1, 0x800000, f);
+    void* buf = (void*)ALL_PURPOSE_TMP_BUF;
+    size_t read = fread(buf, 1, 0x800000, f);
     if (!read) {
         return false;
     }
     fclose(f);
 
-    return *(u32*)ALL_PURPOSE_TMP_BUF == ANCAST_MAGIC; 
+    return *(u32*)buf == ANCAST_MAGIC; 
 }
 
 static bool load_fw_from_sd_fat(void){
         FRESULT res = FR_OK;
         static FATFS fatfs = {0};
-        static devoptab_t devoptab = {0};
         FIL f = {0};
         unsigned int read;
 
@@ -538,7 +538,6 @@ u32 _main(void *base)
         boot.mode = 0;
         menu_reset();
     }
-boot:
     serial_send_u32(0x6D6D0001);
     // Reset LED to purple if SD card is successful.
     if (!(pflags_val & (PON_SMC_TIMER | PFLAG_ENTER_BG_NORMAL_MODE)))

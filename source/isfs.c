@@ -108,7 +108,7 @@ static int _isfs_super_check_slot(isfs_ctx *ctx, u32 index)
     return 0;
 }
 
-static int _isfs_decrypt_cluster(const isfs_ctx* ctx, u8 *cluster_data){
+static void _isfs_decrypt_cluster(const isfs_ctx* ctx, u8 *cluster_data){
     aes_reset();
     aes_set_key((u8*)ctx->aes);
     aes_empty_iv();
@@ -175,7 +175,6 @@ int isfs_read_volume(const isfs_ctx* ctx, u32 start_cluster, u32 cluster_count, 
 
     bool ecc_correctable = false;
     bool ecc_uncorrectable = false;
-    bool hmac_error = false;
     bool hmac_partial = false;
     bool nand_error = false;
 
@@ -466,7 +465,7 @@ int isfs_load_keys(isfs_ctx* ctx)
             memcpy(ctx->hmac, o->nand_hmac, sizeof(ctx->hmac));
             break;
         default:
-            printf("ISFS: Unknown super block version %u!\n", ctx->version);
+            printf("ISFS: Unknown super block version %lu!\n", ctx->version);
             return -1;
     }
 
@@ -479,26 +478,30 @@ void isfs_print_fst(isfs_fst* fst)
     const char perm[3] = "-rw";
 
     u8 mode = fst->mode;
-    char buffer[8] = {0};
-    sprintf(buffer, "%c", dir[mode & 3]);
-    sprintf(buffer, "%s%c%c", buffer, perm[(mode >> 6) & 1], perm[(mode >> 6) & 2]);
+    char buffer[8];
+    buffer[0] = dir[mode & 3];
+    buffer[1] = perm[(mode >> 6) & 1];
+    buffer[2] = perm[(mode >> 6) & 2];
     mode <<= 2;
-    sprintf(buffer, "%s%c%c", buffer, perm[(mode >> 6) & 1], perm[(mode >> 6) & 2]);
+    buffer[3] = perm[(mode >> 6) & 1];
+    buffer[4] = perm[(mode >> 6) & 2];
     mode <<= 2;
-    sprintf(buffer, "%s%c%c", buffer, perm[(mode >> 6) & 1], perm[(mode >> 6) & 2]);
-    mode <<= 2;
+    buffer[5] = perm[(mode >> 6) & 1];
+    buffer[6] = perm[(mode >> 6) & 2];
+    buffer[7] = '\0';
 
     printf("%s %02x %04x %04x %08lx (%04x %08lx)     %s\n", buffer,
             fst->attr, fst->uid, fst->gid, fst->size, fst->x1, fst->x3, fst->name);
 }
 
-static void _isfs_print_fst(isfs_fst* fst)
+static void __attribute__((unused)) _isfs_print_fst(isfs_fst* fst)
 {
 #ifdef ISFS_DEBUG
     isfs_print_fst(fst);
 #endif
 }
 
+#ifdef ISFS_DEBUG
 static void _isfs_print_dir(isfs_ctx* ctx, isfs_fst* fst)
 {
     isfs_fst* root = _isfs_get_fst(ctx);
@@ -508,6 +511,7 @@ static void _isfs_print_dir(isfs_ctx* ctx, isfs_fst* fst)
 
     _isfs_print_fst(fst);
 }
+#endif
 
 static int _isfs_fst_get_type(const isfs_fst* fst)
 {

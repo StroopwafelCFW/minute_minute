@@ -164,7 +164,7 @@ static TCHAR* _ELM_mbstoucs2(const char* src, size_t* len)
     return CvtBuf;
 }
 
-static size_t _ELM_ucs2tombs(char* dst, const TCHAR* src)
+static __attribute__((unused)) size_t _ELM_ucs2tombs(char* dst, const TCHAR* src)
 {
     mbstate_t ps = {0};
     size_t count = 0;
@@ -184,7 +184,7 @@ static size_t _ELM_ucs2tombs(char* dst, const TCHAR* src)
                 *dst++ = buff[i];
 
             src++;
-            count += bytes;
+        count += bytes;
         }
         else break;
     }
@@ -268,7 +268,9 @@ int _ELM_open_r(struct _reent* r, void* fileStruct, const char* path, int flags,
 {
     FIL* fp = (FIL*) fileStruct;
     BYTE m = 0;
+#if (_FS_MINIMIZE < 1) && (!_FS_READONLY)
     bool truncate = false;
+#endif
     const TCHAR* p = _ELM_mbstoucs2(_ELM_realpath(path), NULL);
 
 #if !_FS_READONLY
@@ -294,7 +296,9 @@ int _ELM_open_r(struct _reent* r, void* fileStruct, const char* path, int flags,
 #endif
     {
         if (flags & O_TRUNC)
+#if (_FS_MINIMIZE < 1) && (!_FS_READONLY)
             truncate = true;
+#endif
 
         m |= FA_OPEN_EXISTING;
     }
@@ -375,7 +379,7 @@ int _ELM_fstat_r(struct _reent* r, void* fd, struct stat* st)
     return -1;
 }
 
-static time_t _ELM_filetime_to_time(uint16_t t, uint16_t d)
+static __attribute__((unused)) time_t _ELM_filetime_to_time(uint16_t t, uint16_t d)
 {
     struct tm timeParts;
 
@@ -392,7 +396,7 @@ static time_t _ELM_filetime_to_time(uint16_t t, uint16_t d)
     return mktime(&timeParts);
 }
 
-static void _ELM_fileinfo_to_stat(const TCHAR* path, const FILINFO* fi, struct stat* st)
+static __attribute__((unused)) void _ELM_fileinfo_to_stat(const TCHAR* path, const FILINFO* fi, struct stat* st)
 {
     memset(st, 0, sizeof(*st));
 
@@ -430,7 +434,7 @@ static int _ELM_chk_mounted(int disk)
     return false;
 }
 
-static void _ELM_disk_to_stat(int disk, struct stat* st)
+static __attribute__((unused)) void _ELM_disk_to_stat(int disk, struct stat* st)
 {
     memset(st, 0, sizeof(*st));
 

@@ -65,7 +65,6 @@ static u32 initialized = 0;
 static volatile int irq_flag;
 static u32 last_page_read = 0;
 #if defined(NAND_SUPPORT_ERASE) || defined(NAND_SUPPORT_WRITE)
-static u32 nand_min_page = 0x200; // default to protecting boot1+boot2
 static u8 nand_status_buf[STATUS_BUF_SIZE] ALIGNED(NAND_DATA_ALIGN);
 static u8 nand_spare_buf[96] ALIGNED(NAND_DATA_ALIGN);
 #endif

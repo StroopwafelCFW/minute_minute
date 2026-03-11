@@ -15,7 +15,7 @@ bool isfshax_search_patch(size_t from, size_t to, const void *search, size_t sea
     bool ret = false;
     for(size_t p = from; p<=to-search_len; p+=4){
         if(!memcmp((void*)p, search, search_len)){
-            printf("Applying patch %p at %p\n", patch, p + patch_off);
+            printf("Applying patch %p at %p\n", patch, (void*)(p + patch_off));
             BOOT1_serial(0x8D4FF00);
             memcpy((void*)p + patch_off, patch, patch_len);
             ret = true;

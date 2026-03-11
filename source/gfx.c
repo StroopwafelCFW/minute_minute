@@ -27,12 +27,12 @@ void gfx_init(void)
 
 size_t gfx_get_stride(gfx_screen_t screen)
 {
-
+	return 0;
 }
 
 size_t gfx_get_size(gfx_screen_t screen)
 {
-
+	return 0;
 }
 
 void gfx_draw_plot(gfx_screen_t screen, int x, int y, u32 color)

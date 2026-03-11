@@ -290,7 +290,6 @@ out_clock:
 
 out_power:
     sdhc_bus_power(card.handle, 0);
-out:
     return;
 }
 
@@ -312,7 +311,7 @@ void mlc_needs_discover(void)
     DPRINTF(1, ("mlc: enabling power\n"));
     if (sdhc_bus_power(card.handle, ocr) != 0) {
         printf("mlc: powerup failed for card\n");
-        goto out;
+        goto out_power;
     }
 
     DPRINTF(1, ("mlc: enabling clock\n"));
@@ -588,7 +587,6 @@ out_clock:
 
 out_power:
     sdhc_bus_power(card.handle, 0);
-out:
     return;
 }
 
@@ -603,7 +601,7 @@ int mlc_select(void)
     cmd.c_arg = ((u32)card.rca)<<16;
     cmd.c_flags = SCF_RSP_R1B;
     sdhc_exec_command(card.handle, &cmd);
-    printf("%s: resp=%x\n", __FUNCTION__, MMC_R1(cmd.c_resp));
+    printf("%s: resp=%lx\n", __FUNCTION__, MMC_R1(cmd.c_resp));
 //  sdhc_dump_regs(card.handle);
 
 //  printf("present state = %x\n", HREAD4(hp, SDHC_PRESENT_STATE));
@@ -1007,7 +1005,7 @@ static int mlc_do_erase(u32 start, u32 end){
         return -1;
     }
     if(MMC_R1(cmd.c_resp)&~0x900)
-        printf("ERASE: resp=%x\n", MMC_R1(cmd.c_resp));
+        printf("ERASE: resp=%lx\n", MMC_R1(cmd.c_resp));
 
     do {
         //udelay(1);

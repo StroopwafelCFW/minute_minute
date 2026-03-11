@@ -42,20 +42,18 @@ int to_pll_spll_write()
 
 int mem_clocks_related_2__3()
 {
-    int v0; // lr
     unsigned int v1; // r7
     unsigned int v2; // r5
     unsigned int v3; // r12
     int v4; // r3
     int v6; // [sp+0h] [bp-2Ch]
     u32 bspVer; // [sp+4h] [bp-28h] BYREF
-    int v11; // [sp+2Ch] [bp+0h] BYREF
 
     v6 = 0;
     bspVer = latte_get_hw_version();
     if (bspVer)
     {
-        v1 = (read32(LT_IOSTRENGTH_CTRL0) & ~0x7000u | 0x2000) & ~0x38u | 8;
+        v1 = (((read32(LT_IOSTRENGTH_CTRL0) & ~0x7000u) | 0x2000) & ~0x38u) | 8;
         v2 = (bspVer >> 25);
         u32 val_1E4 = read32(LT_IOSTRENGTH_CTRL1);
         v3 = val_1E4 & ~0x1000FC0u;
@@ -63,9 +61,9 @@ int mem_clocks_related_2__3()
         {
             if ( v2 == 32 )
             {
-                v1 = (v1 & ~0x38000u | 0x10000) & ~0xE00u | 0x400;
-                v3 = (val_1E4 & ~0x1000FF8u | 0x10) & ~7u | 2;
-                write32(LT_ACRCLK_STRENGTH_CTRL, (((read32(LT_ACRCLK_STRENGTH_CTRL) & ~0xE00u | 0x800) & ~0x1C0u | 0x100) & ~0x38u | 0x20) & ~7u | 4);
+                v1 = (((v1 & ~0x38000u) | 0x10000) & ~0xE00u) | 0x400;
+                v3 = (((val_1E4 & ~0x1000FF8u) | 0x10) & ~7u) | 2;
+                write32(LT_ACRCLK_STRENGTH_CTRL, (((((((read32(LT_ACRCLK_STRENGTH_CTRL) & ~0xE00u) | 0x800) & ~0x1C0u) | 0x100) & ~0x38u) | 0x20) & ~7u) | 4);
             }
             else if (bspVer & 0xF000000)
             {
@@ -73,10 +71,10 @@ int mem_clocks_related_2__3()
                     v4 = 0xa0;
                 else
                     v4 = 0x80;
-                v1 = (v1 & ~0xE00u | (16 * v4)) & ~0x38000u | 0x20000;
-                v3 = (val_1E4 & ~0x1000FF8u | 0x18) & ~7u | 3;
-                write32(LT_IOSTRENGTH_CTRL2, (read32(LT_IOSTRENGTH_CTRL2) & ~7u | 3) & ~0x38u | 0x18);
-                write32(LT_ACRCLK_STRENGTH_CTRL, (((read32(LT_ACRCLK_STRENGTH_CTRL) & ~0xE00u | 0x600) & ~0x1C0u | 0xC0) & ~0x38u | 0x18) & ~7u | 3);
+                v1 = (((v1 & ~0xE00u) | (16 * v4)) & ~0x38000u) | 0x20000;
+                v3 = (((val_1E4 & ~0x1000FF8u) | 0x18) & ~7u) | 3;
+                write32(LT_IOSTRENGTH_CTRL2, (((read32(LT_IOSTRENGTH_CTRL2) & ~7u) | 3) & ~0x38u) | 0x18);
+                write32(LT_ACRCLK_STRENGTH_CTRL, (((((((read32(LT_ACRCLK_STRENGTH_CTRL) & ~0xE00u) | 0x600) & ~0x1C0u) | 0xC0) & ~0x38u) | 0x18) & ~7u) | 3);
             }
             else
             {
@@ -85,8 +83,8 @@ int mem_clocks_related_2__3()
         }
         else
         {
-            v1 = (v1 & ~0x38000u | 0x10000) & ~0xE00u | 0x400;
-            v3 = (val_1E4 & ~0x1000FF8u | 0x20) & ~7u | 4;
+            v1 = (((v1 & ~0x38000u) | 0x10000) & ~0xE00u) | 0x400;
+            v3 = (((val_1E4 & ~0x1000FF8u) | 0x20) & ~7u) | 4;
         }
         write32(LT_IOSTRENGTH_CTRL0, v1);
         write32(LT_IOSTRENGTH_CTRL1, v3);
@@ -96,13 +94,11 @@ int mem_clocks_related_2__3()
 
 int mem_clocks_related_2__2()
 {
-    int v0; // lr
     int v1; // r4
     int v2; // r1
     int v3; // r2
     int v4; // r3
     u32 bspVer; // [sp+0h] [bp-1Ch] BYREF
-    int v10; // [sp+1Ch] [bp+0h] BYREF
 
     v1 = 0;
     bspVer = latte_get_hw_version();
@@ -145,7 +141,6 @@ LABEL_11:
 
 int mem_clocks_related_3__3___DdrCafeInit(u16 mode)
 {
-    int v1; // lr
     unsigned int ddr_seq_tcl; // r7
     u16 ddr_seq_madj; // r5
     int v5; // r0
@@ -163,7 +158,6 @@ int mem_clocks_related_3__3___DdrCafeInit(u16 mode)
     int ddr_seq_twl; // [sp+20h] [bp-98h]
     bsp_pll_cfg pllCfg2; // [sp+24h] [bp-94h] BYREF
     bsp_pll_cfg pllCfg; // [sp+5Ah] [bp-5Eh] BYREF
-    int v26; // [sp+B8h] [bp+0h] BYREF
     u32 bspVer;
     u16 v16;
     u16 v17;
@@ -599,10 +593,8 @@ void ddr_seq_write16(u16 seqAddr, u16 seqVal)
 
 int mem_clocks_related_3__2___MCP_HWSetMEM2SelfRefreshMode(u16 mode)
 {
-    int v1; // lr
     int v2; // r4
     bsp_pll_cfg v4; // [sp+2h] [bp-52h] BYREF
-    int v8; // [sp+54h] [bp+0h] BYREF
 
     memset(&v4, 0, sizeof(v4));
     v2 = pll_dram_read(&v4);
@@ -660,11 +652,10 @@ int mem_clocks_related_2(u16 mode)
 
 int mem2_get_clk_info()
 {
-    int v0; // r5
     int result; // r0
 
     latte_hw_version = latte_get_hw_version();
-    if ( !latte_hw_version | bsp_get_sys_clock_info(&latte_clk_info) )
+    if ( (!latte_hw_version) | bsp_get_sys_clock_info(&latte_clk_info) )
         result = -2;
     else
         result = 0;
@@ -674,9 +665,7 @@ int mem2_get_clk_info()
 int bsp_get_sys_clock_info(bsp_system_clock_info *pOut)
 {
     int ret = 0;
-    int v5; // r3
     bsp_system_clock_info v7; // [sp+0h] [bp-2Ch] BYREF
-    int v12; // [sp+2Ch] [bp+0h] BYREF
 
     memset(&v7, 0, sizeof(v7));
     u32 bspVer = latte_get_hw_version();
@@ -737,7 +726,6 @@ int init_mem2(u16 mem_mode)
         ret = 0x40000;
     }
 
-LABEL_8:
     ret = ret | mem_clocks_related_2(mem_mode);
     ret = ret | mem_clocks_related_3(mem_mode);
     return ret;

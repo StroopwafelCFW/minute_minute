@@ -157,7 +157,7 @@ int smc_mask_register(u8 offset, u8 mask, u8 val)
 {
     int ret = 0;
     u8 existing = 0;
-    if (ret = smc_read_register(offset, &existing)) {
+    if ((ret = smc_read_register(offset, &existing))) {
         return ret;
     }
 
@@ -186,7 +186,7 @@ int smc_write_raw_multiple(u8* data, u32 count)
 
 int smc_set_notification_led(u8 val)
 {
-    smc_write_register(SMCREG_NOTIFICATION_LED, val);
+    return smc_write_register(SMCREG_NOTIFICATION_LED, val);
 }
 
 int smc_set_odd_power(bool enable)
@@ -276,17 +276,17 @@ int smc_drc_wifi_rst()
 
 int smc_set_rearusb_power(int state)
 {
-    smc_mask_register(0x43, 2, state ? 2 : 0);
+    return smc_mask_register(0x43, 2, state ? 2 : 0);
 }
 
 int smc_set_frontusb_power(int state)
 {
-    smc_mask_register(0x43, 1, state ? 1 : 0);
+    return smc_mask_register(0x43, 1, state ? 1 : 0);
 }
 
 int smc_set_wifi_idk(int state)
 {
-    smc_mask_register(0x46, 1, state ? 1 : 0);
+    return smc_mask_register(0x46, 1, state ? 1 : 0);
 }
 
 u8 smc_get_events(void)

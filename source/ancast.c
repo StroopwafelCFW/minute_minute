@@ -233,7 +233,7 @@ int ancast_load(ancast_ctx* ctx)
 #if !defined(MINUTE_BOOT1) || defined(ISFSHAX_STAGE2)
     else if (ctx->file)
     {
-        printf("ancast: reading 0x%x bytes from %s\n", ctx->header_size + ctx->header.body_size, ctx->path);
+        printf("ancast: reading 0x%lx bytes from %s\n", (unsigned long)(ctx->header_size + ctx->header.body_size), ctx->path);
         fseek(ctx->file, 0, SEEK_SET);
 
         u32 total_size = ctx->header_size + ctx->header.body_size;
@@ -244,12 +244,11 @@ int ancast_load(ancast_ctx* ctx)
 #endif
 
 #if 1
-        int led_alternate = 0;
         for (u32 i = 0; i < total_size; i += 0x100000)
         {
             if (i % 0x100000 == 0)
             {
-                printf("ancast: ...%08x -> %08x\n", i, (u32)ctx->load + i);
+                printf("ancast: ...%08lx -> %08lx\n", i, (u32)ctx->load + i);
             }
 
             u32 to_read = 0x100000;
@@ -259,7 +258,7 @@ int ancast_load(ancast_ctx* ctx)
 
             int count = fread(ctx->load + i, to_read, 1, ctx->file);
             if(count != 1) {
-                printf("ancast: failed to read offs=%08x, %s (%d).\n", i, ctx->path, errno);
+                printf("ancast: failed to read offs=%08lx, %s (%d).\n", i, ctx->path, errno);
                 ancast_fini(ctx);
                 return errno;
             }
@@ -550,6 +549,10 @@ u32 ancast_iop_load_from_memory(void* ancast_mem)
 extern int main_allow_legacy_patches;
 u32 ancast_patch_load(const char* fn_ios, const char* fn_patch, const char* plugins_fpath, bool rednand)
 {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
+#pragma GCC diagnostic ignored "-Wstringop-overread"
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
     u32* patch_base = (u32*)0x100;
 
     // Insert end stub just in case file is short
@@ -580,9 +583,10 @@ u32 ancast_patch_load(const char* fn_ios, const char* fn_patch, const char* plug
     }
     if(patch_base[2] != 1)
     {
-        printf("ancast: unknown version 0x%X\n", (unsigned int)patch_base[2]);
+        printf("ancast: unknown version 0x%lx\n", patch_base[2]);
         return 0;
     }
+#pragma GCC diagnostic pop
     
     // load IOS image
     u32 vector = ancast_iop_load(fn_ios);
