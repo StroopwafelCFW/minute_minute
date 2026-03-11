@@ -17,6 +17,30 @@ If no SD card is inserted, minute was loaded from SLC and the `slc:/sys/hax/ios_
 
 When a IOSU reload happens, minute will automatically boot the last booted option again, to disable this behavior set `autoreload=false` in the `[boot]` section.
 
+## Building
+
+To build you need [devkitPPC](https://devkitpro.org/wiki/Getting_Started) installed.
+
+- Build `boot1.img`: `make -f Makefile.boot1`
+- Build `fw.img`: `make`
+- Build `fw_fastboot.img`: `make -f Makefile.fastboot`
+- Build `isfshax_stage2.elf`: `make -f Makefile.isfshax`
+
+### Building using Docker
+
+It's possible to use a docker image for building. This way you don't need anything installed on your host system.
+
+```bash
+# Build docker image (only needed once)
+docker build . -t minute-builder
+
+# Build everything
+docker run --rm -v ${PWD}:/project minute-builder /bin/bash -c "make -f Makefile.boot1 && make && make -f Makefile.fastboot && make -f Makefile.isfshax && cat boot1.img fw.img > sdcard.img"
+
+# Clean (Note: only cleans the default build and elfloader)
+docker run --rm -v ${PWD}:/project minute-builder make clean
+```
+
 ## redNAND
 
 redNAND allows replacing one or more of the Wii Us internal storage devices (SLCCMPT, SLC, MLC) with partitions on the SD card. redNAND is implemented in stroopwafel, but configured through minute. The SLC and SLCCMPT partition are without the ECC/HMAC data. \
