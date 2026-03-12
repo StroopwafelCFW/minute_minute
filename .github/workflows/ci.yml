@@ -12,6 +12,9 @@ on:
       - main
       - master
 
+permissions:
+  contents: write
+
 jobs:
   build-binary:
     runs-on: ubuntu-22.04
@@ -58,7 +61,7 @@ jobs:
       uses: "softprops/action-gh-release@v2"
       with:
         tag_name: ${{ env.REPOSITORY_NAME }}-${{ env.DATETIME }}
-        draft: false
+        draft: true
         prerelease: true
         generate_release_notes: true
         name: Nightly-${{ env.REPOSITORY_NAME }}-${{ env.DATETIME }}
