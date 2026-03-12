@@ -52,11 +52,6 @@ jobs:
         name: minute-artifacts
         path: artifacts
 
-    - name: zip artifact
-      run: |
-        cd artifacts
-        zip ../${{ env.REPOSITORY_NAME }}_${{ env.DATETIME }}.zip boot1.img fw.img fw_fastboot.img
-    
     - name: Create Release
       uses: "softprops/action-gh-release@v2"
       with:
@@ -66,4 +61,6 @@ jobs:
         generate_release_notes: true
         name: Nightly-${{ env.REPOSITORY_NAME }}-${{ env.DATETIME }}
         files: |
-          ./${{ env.REPOSITORY_NAME }}_${{ env.DATETIME }}.zip
+          artifacts/boot1.img
+          artifacts/fw.img
+          artifacts/fw_fastboot.img
