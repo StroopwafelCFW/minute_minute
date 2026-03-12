@@ -29,7 +29,7 @@ jobs:
     - name: Build Docker image
       uses: docker/build-push-action@v6
       with:
-        context: minute_minute
+        context: .
         load: true
         tags: builder:latest
         cache-from: type=gha
