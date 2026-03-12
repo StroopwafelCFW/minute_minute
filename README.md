@@ -32,13 +32,13 @@ It's possible to use a docker image for building. This way you don't need anythi
 
 ```bash
 # Build docker image (only needed once)
-docker build . -t minute-builder
+podman build . -t minute-builder
 
 # Build everything
-docker run --rm -v ${PWD}:/project minute-builder /bin/bash -c "make -f Makefile.boot1 && make && make -f Makefile.fastboot && make -f Makefile.isfshax && cat boot1.img fw.img > sdcard.img"
+podman run --rm -v ${PWD}:/project minute-builder /bin/bash -c "make -f Makefile.boot1 && make && make -f Makefile.fastboot"
 
 # Clean (Note: only cleans the default build and elfloader)
-docker run --rm -v ${PWD}:/project minute-builder make clean
+podman run --rm -v ${PWD}:/project minute-builder /bin/bash -c "make -f Makefile.boot1 clean && make clean && make -f Makefile.fastboot clean
 ```
 
 ## redNAND

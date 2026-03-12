@@ -23,7 +23,7 @@ jobs:
     - name: build binary
       run: |
         docker build . -t builder
-        docker run --rm -v ${PWD}:/project builder /bin/bash -c "make -f Makefile.boot1 && make && make -f Makefile.fastboot && make -f Makefile.isfshax && cat boot1.img fw.img > sdcard.img"
+        docker run --rm -v ${PWD}:/project builder /bin/bash -c "make -f Makefile.boot1 clean && make clean && make -f Makefile.fastboot clean && make -f Makefile.isfshax clean && make -f Makefile.boot1 && make && make -f Makefile.fastboot && make -f Makefile.isfshax && cat boot1.img fw.img > sdcard.img"
         
     - uses: actions/upload-artifact@v4
       with:
