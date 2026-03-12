@@ -52,7 +52,7 @@ jobs:
     - name: zip artifact
       run: |
         cd artifacts
-        zip -r ../${{ env.REPOSITORY_NAME }}_${{ env.DATETIME }}.zip ./*
+        zip ../${{ env.REPOSITORY_NAME }}_${{ env.DATETIME }}.zip boot1.img fw.img fw_fastboot.img
     
     - name: Create Release
       uses: "softprops/action-gh-release@v2"
