@@ -1063,13 +1063,12 @@ u32 _main(void *base)
         printf("Showing menu...\n");
         menu_init(&menu_main);
 
-        smc_get_events();
-        if(is_iosu_reload)
-            smc_set_odd_power(true);
+        smc_get_events();         
     }
 #endif // !FASTBOOT
 
 skip_menu:
+    smc_set_odd_power(true);
 #ifdef MEASURE_TIME
     u32 deinit_start = read32(LT_TIMER);
 #endif
