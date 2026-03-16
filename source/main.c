@@ -476,11 +476,16 @@ u32 _main(void *base)
 
     bool slc_mounted = false;
     bool force_fallback = false;
+    bool force_fallback_minimal = false;
 #ifdef ISFSHAX_STAGE2
-    force_fallback = (smc_get_events() & SMC_POWER_BUTTON && !(pflags_val & (CMPT_RETSTAT0|CMPT_RETSTAT1)));
+    if(!(pflags_val & (CMPT_RETSTAT0|CMPT_RETSTAT1))) {
+        u8 smc_events = smc_get_events();
+        force_fallback = (smc_events & SMC_POWER_BUTTON);
+        force_fallback_minimal = (smc_events & SMC_EJECT_BUTTON);
+    }
 
-    //Skip ISFS boot by pressing power
-    if (!force_fallback) {
+    //Skip ISFS boot by pressing power or eject
+    if (!force_fallback && !force_fallback_minimal) {
         serial_send_u32(0x5D4D0001);
         irq_initialize();
         isfs_init(ISFSVOL_SLC);
@@ -491,9 +496,11 @@ u32 _main(void *base)
         serial_send_u32(0x5D4D0004);
     }
 #endif // ISFSHAX_STAGE2
-    if(!force_fallback) // have a way to force lower SD clock
+    if(!force_fallback && !force_fallback_minimal) // have a way to force lower SD clock
         usb_init(); // needed for SD clock
-    boot.vector = load_fw_from_sd();
+    
+    if(!force_fallback_minimal)
+        boot.vector = load_fw_from_sd();
 
 #ifdef ISFSHAX_STAGE2
     if(slc_mounted){
