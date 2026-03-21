@@ -936,6 +936,10 @@ u32 _main(void *base)
 
 #endif // FASTBOOT
 
+    if(seeprom.bc.sata_device == SATA_TYPE_GEN2HDD || seeprom.bc.sata_device == SATA_TYPE_GEN1HDD){
+        smc_set_odd_power(true);
+    }
+
     if (prsh_is_encrypted)
     {
         printf("prsh: decrypting.\n");
