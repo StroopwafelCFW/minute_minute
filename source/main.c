@@ -83,6 +83,7 @@ int main_is_de_Fused = 0;
 int main_force_pause = 0;
 int main_allow_legacy_patches = 0;
 bool auto_reload = true;
+static bool main_keep_odd_off = false;
 
 int main_autoboot(void);
 void main_quickboot_patch_slc(void);
@@ -1062,7 +1063,8 @@ u32 _main(void *base)
             }
         }
     }
-    
+
+    bool turned_off_odd = false;    
     // Try to autoboot if specified, if it fails just load the menu.
     if(autoboot && main_autoboot() == 0) {
         printf("Autobooting...\n");
@@ -1071,10 +1073,12 @@ u32 _main(void *base)
     {
         smc_get_events();
         //leave ODD Power on for HDDs
-        if (has_no_otp_bin || 
+        if (has_no_otp_bin ||
                 (seeprom.bc.sata_device != SATA_TYPE_GEN2HDD && 
-                 seeprom.bc.sata_device != SATA_TYPE_GEN1HDD))
+                 seeprom.bc.sata_device != SATA_TYPE_GEN1HDD)) {
             smc_set_odd_power(false);
+            turned_off_odd = true;
+        }
 
         // Shut down if in ECO mode w/o a valid autoboot.
         if (no_menu) {
@@ -1161,7 +1165,8 @@ skip_menu:
             deinit_start-init_end, end-deinit_start);
 #endif // MEASURE_TIME
 
-    if(!is_eco_mode && seeprom.bc.sata_device != SATA_TYPE_NODRIVE){
+    if(!is_eco_mode && seeprom.bc.sata_device != SATA_TYPE_NODRIVE && 
+            (!main_keep_odd_off || (is_iosu_reload && turned_off_odd))){
         printf("Turning on ODD power\n");
         smc_set_odd_power(true);
     }
@@ -1190,6 +1195,8 @@ int boot_ini(const char* key, const char* value)
         main_allow_legacy_patches = minini_get_bool(value, 0);
     else if(!strcmp(key, "autoreload")){
         auto_reload = minini_get_bool(value, true);
+    } else if(!strcmp(key, "odd_power")){
+        main_keep_odd_off = !minini_get_bool(value, false);
     }
 
     return 0;
