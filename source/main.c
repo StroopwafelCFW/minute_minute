@@ -1033,6 +1033,7 @@ u32 _main(void *base)
     u32 init_end = read32(LT_TIMER);
 #endif
 
+    bool turned_off_odd = false;
 #ifdef FASTBOOT
     if(!minute_on_sd)
         main_quickboot_patch_slc();
@@ -1063,8 +1064,7 @@ u32 _main(void *base)
             }
         }
     }
-
-    bool turned_off_odd = false;    
+    
     // Try to autoboot if specified, if it fails just load the menu.
     if(autoboot && main_autoboot() == 0) {
         printf("Autobooting...\n");
