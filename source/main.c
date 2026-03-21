@@ -82,8 +82,11 @@ bool use_minute_img = false;
 int main_is_de_Fused = 0;
 int main_force_pause = 0;
 int main_allow_legacy_patches = 0;
+
+#ifndef MINUTE_BOOT1
 bool auto_reload = true;
 static bool main_keep_odd_off = false;
+#endif
 
 int main_autoboot(void);
 void main_quickboot_patch_slc(void);
