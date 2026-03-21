@@ -447,9 +447,12 @@ u32 _main(void *base)
     // Clear all MEM0
     memset((void*)0x08000000, 0, 0x002E0000);
 
+    bool enable_odd_power = true;
+
     // Standby Mode boot doesn't need to upclock
-    if (!(pflags_val & PON_SMC_TIMER))
-    {
+    if (pflags_val & PON_SMC_TIMER) {
+        enable_odd_power = false;
+    } else {
         // Adjust IOP clock multiplier to 3x
         if (!(read32(LT_IOP2X) & 0x04))
         {
@@ -521,7 +524,10 @@ u32 _main(void *base)
             }
         }
     }
-    if(!boot.vector){
+    if(boot.vector){
+        // minute will enable ODD power later
+        enable_odd_power = false;
+    } else {
         serial_send_u32(0x5D4D0007);
         if(!slc_mounted){
             irq_initialize();
@@ -600,6 +606,12 @@ u32 _main(void *base)
 #endif
 
     BOOT1_PASSALONG->boot_info.boot_state = pflags_val;
+
+    if(enable_odd_power){
+        serial_send_u32(0x6D6D00FE);
+        smc_set_odd_power(true);
+    }
+
     serial_send_u32(0x6D6D00FF);
     return boot.vector;
 }
@@ -1071,8 +1083,6 @@ u32 _main(void *base)
         menu_init(&menu_main);
 
         smc_get_events();
-        if(is_iosu_reload)
-            smc_set_odd_power(true);
     }
 #endif // !FASTBOOT
 
@@ -1146,6 +1156,11 @@ skip_menu:
             sd_start-graphic_end, sd_end-sd_start, ini_start-sd_end, ini_end-ini_start, init_end-ini_end,
             deinit_start-init_end, end-deinit_start);
 #endif // MEASURE_TIME
+
+    if(!is_eco_mode){
+        printf("Turning on ODD power\n");
+        smc_set_odd_power(true);
+    }
 
     printf("Jumping to IOS... GO GO GO\n");
 
