@@ -1157,7 +1157,7 @@ skip_menu:
             deinit_start-init_end, end-deinit_start);
 #endif // MEASURE_TIME
 
-    if(!is_eco_mode){
+    if(!is_eco_mode && seeprom.bc.sata_device != SATA_TYPE_NODRIVE){
         printf("Turning on ODD power\n");
         smc_set_odd_power(true);
     }
