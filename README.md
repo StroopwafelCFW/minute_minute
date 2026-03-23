@@ -17,6 +17,14 @@ If no SD card is inserted, minute was loaded from SLC and the `slc:/sys/hax/ios_
 
 When a IOSU reload happens, minute will automatically boot the last booted option again, to disable this behavior set `autoreload=false` in the `[boot]` section.
 
+## Drive Power
+
+On a stock system boot1 turns on the power to the Disc Drive (ODD), just before it boots the IOS. With minute and stroopwafel we introduce an additional stage and with that a delay. The disc drive makes noise at two points in the boot process: Once when it's power gets enabled and once when the SATA connection gets initialized. On a stock system this delay is so short that the first (power) drive initialization / noise is immediately interrupted by the second one (SATA). The delay caused by minute + stroopwafel makes causes it to be two noticeable separate noises.
+
+To avoid this as much as possible, the minute boot1 (from minute 2.10 and on)(which is also part of ISFSHax 5.1 and on and takes over before the stock boot1 initializes the drive) does not turn on the drive power and minute waits until the last possible moment for turning on the drive power. Stroopwafel was optimized to not output anything on the debug port, since that was adding noticeable delay. This is close to the stock behavior.
+
+To get totally rid of the first noise minute now has the option to set `odd_power=false` in the `minute.ini` (default is true). When set to false, minute does not turn on the ODD power. And IOSU will turn on the power, just before it initializes the SATA connection. But on some consoles this causes a crash on cold boot after being off for several hours. The reason for that crash is not fully clear, but it is assumed that enabling the power causes some power instability, which is more critical in IOSU with more of the system (like the PPC) running.
+
 ## Building
 
 To build you need [devkitPPC](https://devkitpro.org/wiki/Getting_Started) installed.
