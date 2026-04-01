@@ -156,7 +156,7 @@ static bool load_fw_from_sd_fat(void){
         }
         res = f_read(&f, (void*)ALL_PURPOSE_TMP_BUF, 0x800000, &read);
         f_close(&f);
-        if (res != FR_OK) {
+        if (res != FR_OK || read < 327680) {
             return false;
         }
 
