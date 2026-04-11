@@ -490,6 +490,7 @@ u32 _main(void *base)
     if(!force_fallback_minimal)
         boot.vector = load_fw_from_sd();
 
+    bool boot_minute = true;
 #ifdef ISFSHAX_STAGE2
     if(slc_mounted){
         if(!boot.vector) {
@@ -509,7 +510,7 @@ u32 _main(void *base)
             }
         }
     }
-    bool boot_minute = !!boot.vector;
+    boot_minute = !!boot.vector;
     if(!boot.vector) {
         serial_send_u32(0x5D4D0007);
         if(!slc_mounted){
