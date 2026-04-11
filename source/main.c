@@ -126,7 +126,7 @@ static bool read_ancast(const char *path){
     }
     fclose(f);
 
-    return *(u32*)buf == ANCAST_MAGIC; 
+    return *(u32*)buf == ANCAST_MAGIC;
 }
 
 static bool load_fw_from_sd_fat(void){
@@ -167,7 +167,7 @@ static bool load_fw_from_sd_fat(void){
 
 static u32 load_fw_from_sd(){
     u32 vector = 0;
-    for(int i = 0; !vector && i<5; i++)   
+    for(int i = 0; !vector && i<5; i++)
     {
         if(i==1)
             smc_set_notification_led(LEDRAW_ORANGE_PULSE);
@@ -183,7 +183,7 @@ static u32 load_fw_from_sd(){
         else {
             vector = ancast_iop_load_from_raw_sector(0x80);
         }
-        
+
         serial_send_u32(0x5D5D0004);
     }
     printf("Shutting down SD card...\n");
@@ -334,7 +334,7 @@ u32 _main(void *base)
     serial_send_u32(pflags_val);
     serial_send_u32(0x464C4147);
 
-#else 
+#else
     // ISFSHAX_STAGE2
     // on ISFShax the flags were already extracted by boot1
     boot_info_t *bootinfo = init_prsh_get_bootinfo();
@@ -372,7 +372,7 @@ u32 _main(void *base)
             udelay(10000);
         }
     }
-    
+
 
     u32 mem_mode = 0;
 
@@ -451,12 +451,8 @@ u32 _main(void *base)
     // Clear all MEM0
     memset((void*)0x08000000, 0, 0x002E0000);
 
-    bool enable_odd_power = true;
-
     // Standby Mode boot doesn't need to upclock
-    if (pflags_val & PON_SMC_TIMER) {
-        enable_odd_power = false;
-    } else {
+    if (!(pflags_val & PON_SMC_TIMER))  {
         // Adjust IOP clock multiplier to 3x
         if (!(read32(LT_IOP2X) & 0x04))
         {
@@ -464,22 +460,7 @@ u32 _main(void *base)
         }
     }
 
-    // PON_SMC_TIMER and an unknown power flag are set
-    if (pflags_val & (PON_SMC_TIMER | PFLAG_ENTER_BG_NORMAL_MODE))
-    {
-        // Set DcdcPowerControl2 GPIO's state
-        gpio_dcdc_pwrcnt2_set(0);
-
-        smc_set_cc_indicator(LED_ON);
-    }
-    else
-    {
-        // Set DcdcPowerControl2 GPIO's state
-        gpio_dcdc_pwrcnt2_set(1);
-
-        //smc_set_on_indicator(LED_ON);
-        smc_set_notification_led(LEDRAW_PURPLE);
-    }
+    smc_set_notification_led(LEDRAW_PURPLE);
 
     bool slc_mounted = false;
     bool force_fallback = false;
@@ -505,7 +486,7 @@ u32 _main(void *base)
 #endif // ISFSHAX_STAGE2
     if(!force_fallback && !force_fallback_minimal) // have a way to force lower SD clock
         usb_init(); // needed for SD clock
-    
+
     if(!force_fallback_minimal)
         boot.vector = load_fw_from_sd();
 
@@ -528,10 +509,8 @@ u32 _main(void *base)
             }
         }
     }
-    if(boot.vector){
-        // minute will enable ODD power later
-        enable_odd_power = false;
-    } else {
+    bool boot_minute = !!boot.vector;
+    if(!boot.vector) {
         serial_send_u32(0x5D4D0007);
         if(!slc_mounted){
             irq_initialize();
@@ -546,42 +525,18 @@ u32 _main(void *base)
         serial_send_u32(0x5D4D0008);
         slc_mounted = false;
     }
+#endif
 
     while(!boot.vector) // everytging failed... just keep trying...
         boot.vector = load_fw_from_sd();
-#endif
 
-    if(boot.vector){
-        boot.mode = 0;
-        menu_reset();
-    }
     serial_send_u32(0x6D6D0001);
     // Reset LED to purple if SD card is successful.
     if (!(pflags_val & (PON_SMC_TIMER | PFLAG_ENTER_BG_NORMAL_MODE)))
     {
         smc_set_notification_led(LEDRAW_PURPLE);
     }
-    serial_send_u32(0x6D6D0002);
-    dc_flushall();
-    ic_invalidateall();
-    serial_send_u32(0x6D6D0003);
-    printf("Shutting down caches and MMU...\n");
-    mem_shutdown();
-    serial_send_u32(0x6D6D0004);
-    switch(boot.mode) {
-        case 0:
-            if(boot.vector) {
-                printf("Vectoring to 0x%08lX...\n", boot.vector);
-            } else {
-                printf("No vector address, hanging!\n");
-                smc_set_notification_led(LEDRAW_ORANGE_PULSE);
-                panic(0);
-            }
-            break;
-        //case 1: smc_power_off(); break;
-        //case 2: smc_reset(); break;
-    }
-    serial_send_u32(0x6D6D0005);
+
     // Let minute know that we're launched from boot1
     memcpy(BOOT1_PASSALONG->magic, PASSALONG_MAGIC_BOOT1, 8);
     if(minute_on_slc)
@@ -589,7 +544,7 @@ u32 _main(void *base)
     else
         memcpy(BOOT1_PASSALONG->magic_device, PASSALONG_MAGIC_DEVICE_SD, 8);
 
-    memcpy(BOOT1_PASSALONG->magic_minute_img, 
+    memcpy(BOOT1_PASSALONG->magic_minute_img,
             use_minute_img?PASSALONG_MAGIC_MINUTE_IMG:PASSALONG_MAGIC_FW_IMG, 8);
 
 #ifdef ISFSHAX_STAGE2
@@ -611,10 +566,32 @@ u32 _main(void *base)
 
     BOOT1_PASSALONG->boot_info.boot_state = pflags_val;
 
-    if(enable_odd_power){
-        serial_send_u32(0x6D6D00FE);
-        smc_set_odd_power(true);
+    serial_send_u32(0x6D6D00FE);
+    // PON_SMC_TIMER and an unknown power flag are set
+    if (pflags_val & (PON_SMC_TIMER | PFLAG_ENTER_BG_NORMAL_MODE))
+    {
+        // Set DcdcPowerControl2 GPIO's state
+        gpio_dcdc_pwrcnt2_set(0);
+
+        smc_set_cc_indicator(LED_ON);
     }
+    else
+    {
+        if(!boot_minute)
+            smc_set_odd_power(true);
+        // Set DcdcPowerControl2 GPIO's state
+        gpio_dcdc_pwrcnt2_set(1);
+
+        //smc_set_on_indicator(LED_ON);
+        smc_set_notification_led(LEDRAW_PURPLE);
+    }
+    serial_send_u32(0x6D6D0002);
+    dc_flushall();
+    ic_invalidateall();
+    serial_send_u32(0x6D6D0003);
+    // Shutting down caches and MMU...;
+    mem_shutdown();
+    //serial_send_u32(0x6D6D0004);
 
     serial_send_u32(0x6D6D00FF);
     return boot.vector;
@@ -658,7 +635,7 @@ menu menu_main = {
 };
 #endif // !FASTBOOT
 
-static bool is_eco_mode = false; 
+static bool is_eco_mode = false;
 static bool display_inited = false;
 static void enable_display(void){
     if(is_eco_mode)
@@ -709,6 +686,13 @@ u32 _main(void *base)
     serial_send_u32(0xF00FCAFE);
 
     main_loaded_from_ptb = *(u32*)PTB_MAGIC_ADDR == PTB_MAGIC;
+    if(main_loaded_from_ptb)
+        gpio_dcdc_pwrcnt2_set(1);
+
+    printf("Initializing exceptions...\n");
+    exception_initialize();
+    printf("Configuring caches and MMU...\n");
+    mem_initialize();
 
     prsh_copy_default_bootinfo(&boot_info_copy);
 
@@ -783,7 +767,7 @@ u32 _main(void *base)
         printf("minute loaded by PAID THE BEAK\n");
     }
     printf("boot_state: %X\n", boot_info_copy.boot_state);
- 
+
     // PRSHhax has the timer flag set, but wasn't loaded from minute boot1 and shouldn't be treated as eco mode
     is_eco_mode = (boot_info_copy.boot_state & PON_SMC_TIMER) && main_loaded_from_boot1;
     if(is_eco_mode) {
@@ -832,11 +816,6 @@ u32 _main(void *base)
     else if (boot_info_source == 3) {
         printf("boot_info source: pre-decrypted PRSH not from boot1\n");
     }
-
-    printf("Initializing exceptions...\n");
-    exception_initialize();
-    printf("Configuring caches and MMU...\n");
-    mem_initialize();
 
     irq_initialize();
     printf("Interrupts initialized\n");
@@ -1067,7 +1046,7 @@ u32 _main(void *base)
             }
         }
     }
-    
+
     // Try to autoboot if specified, if it fails just load the menu.
     if(autoboot && main_autoboot() == 0) {
         printf("Autobooting...\n");
@@ -1077,7 +1056,7 @@ u32 _main(void *base)
         smc_get_events();
         //leave ODD Power on for HDDs
         if (has_no_otp_bin ||
-                (seeprom.bc.sata_device != SATA_TYPE_GEN2HDD && 
+                (seeprom.bc.sata_device != SATA_TYPE_GEN2HDD &&
                  seeprom.bc.sata_device != SATA_TYPE_GEN1HDD)) {
             smc_set_odd_power(false);
             turned_off_odd = true;
@@ -1111,17 +1090,13 @@ skip_menu:
 #ifndef FASTBOOT
     printf("Shutting down MLC...\n");
     mlc_exit();
-    
+
     printf("Shutting down SD card...\n");
     ELM_Unmount();
     sdcard_exit();
 #endif //!FASTBOOT
 
-    printf("Shutting down interrupts...\n");
-    irq_shutdown();
 
-    printf("Shutting down caches and MMU...\n");
-    mem_shutdown();
 
     switch(boot.mode) {
         case 0:
@@ -1149,6 +1124,19 @@ skip_menu:
         case 3: smc_reset_no_defuse(); break;
     }
 
+    if(!is_eco_mode && seeprom.bc.sata_device != SATA_TYPE_NODRIVE &&
+            (!main_keep_odd_off || (is_iosu_reload && turned_off_odd))){
+        printf("Turning on ODD power\n");
+        // somehow this needs to happen before turning off the caches
+        smc_set_odd_power(true);
+    }
+
+    printf("Shutting down interrupts...\n");
+    irq_shutdown();
+
+    printf("Shutting down caches and MMU...\n");
+    mem_shutdown();
+
 #ifdef MEASURE_TIME
     u32 end = read32(LT_TIMER);
     printf( "minute:        %u\n"
@@ -1163,16 +1151,10 @@ skip_menu:
             " loading:      %u\n"
             " deinit        %u\n",
             end-minute_start_time,
-            init_end-minute_start_time, graphic_start-minute_start_time, graphic_end-graphic_start, 
+            init_end-minute_start_time, graphic_start-minute_start_time, graphic_end-graphic_start,
             sd_start-graphic_end, sd_end-sd_start, ini_start-sd_end, ini_end-ini_start, init_end-ini_end,
             deinit_start-init_end, end-deinit_start);
 #endif // MEASURE_TIME
-
-    if(!is_eco_mode && seeprom.bc.sata_device != SATA_TYPE_NODRIVE && 
-            (!main_keep_odd_off || (is_iosu_reload && turned_off_odd))){
-        printf("Turning on ODD power\n");
-        smc_set_odd_power(true);
-    }
 
     printf("Jumping to IOS... GO GO GO\n");
 
@@ -1546,19 +1528,19 @@ void silly_tests()
             printf("%s", serial_input);
         }
 
-        
+
         //printf("\n%02x %02x\n", test_read_serial, input);
         //udelay(1000*1000);
     }
 #endif
 
     //printf("%x\n", read32(LT_SYSCFG1));
-    
+
 #if 0
     set32(LT_MEMIRR, 1<<6);
 
     printf("%08x\n", read32(LT_DBGBUSRD));
-    
+
     while (1)
     {
 #if 0
@@ -1566,17 +1548,17 @@ void silly_tests()
         {
             for (int i = 0; i < 0x2; i++)
             {
-                write32(LT_DBGPORT, (0<<9) | (i<<15) | 0 | (0<<13) | (0<<12) | (j<<16)); //| (1<<25) // 
+                write32(LT_DBGPORT, (0<<9) | (i<<15) | 0 | (0<<13) | (0<<12) | (j<<16)); //| (1<<25) //
                 printf("%02x %04x: %08x\n", i, j, read32(LT_DBGBUSRD));
             }
         }
 #endif
-        
+
 
         //write32(LT_DBGPORT, (1<<9) | (22<<1) | 0 | (0<<13) | (1<<12) | (22<<14)); //| (1<<25)
         //printf("asdf\n");
         //printf("%08x\n", read32(LT_DBGPORT));
-        
+
         //write32(LT_DBGBUSRD, 0);
 
         //printf("%x\n", read32(LT_SYSCFG1));
