@@ -1008,7 +1008,7 @@ u32 _main(void *base)
     }
 
     // ~Triple press opens menu
-    if (smc_get_events() & SMC_POWER_BUTTON) {
+    if (!(boot_info_copy.boot_state & (CMPT_RETSTAT0|CMPT_RETSTAT1)) && (smc_get_events() & SMC_POWER_BUTTON)) {
         printf("Power button spam, showing menu...\n");
         autoboot = false;
     }
