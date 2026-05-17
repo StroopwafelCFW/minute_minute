@@ -1969,6 +1969,11 @@ void dump_restore_slc_raw(void)
 
     gfx_clear(GFX_ALL, BLACK);
     printf("Restoring SLC.RAW...\n");
+    printf("This is not recommended, if you don't know what you are doing stop\n");
+    printf("This will desync the SCFM with the MLC. You will also need to restore or rebuild the MLC\n");
+    printf("This will likely not fix your problem, please seek out help first\n");
+    if (console_abort_confirmation_power_no_eject_yes()) 
+        return;
 
     res = _dump_restore_slc_raw(NAND_BANK_SLC, 0, false);
     if(res) {
