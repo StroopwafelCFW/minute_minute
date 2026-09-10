@@ -70,14 +70,12 @@ static void wait_write()
     flush();
 }
 
+// Offset is word index, size is number of 16-bit words
 int seeprom_read(void *dst, int offset, int size)
 {
     int i;
     u16 *ptr = (u16 *)dst;
     u16 recv;
-
-    if(size & 1)
-        return -1;
 
     gpio_set_dir(GP_EEP_CLK, GPIO_DIR_OUT);
     gpio_set_dir(GP_EEP_CS, GPIO_DIR_OUT);
@@ -108,13 +106,11 @@ int seeprom_read(void *dst, int offset, int size)
     return size;
 }
 
+// Offset is word index, size is number of 16-bit words
 int seeprom_write(void *src, int offset, int size)
 {
     int i;
     u16 *ptr = (u16 *)src;
-
-    if(size & 1)
-        return -1;
 
     gpio_set_dir(GP_EEP_CLK, GPIO_DIR_OUT);
     gpio_set_dir(GP_EEP_CS, GPIO_DIR_OUT);
