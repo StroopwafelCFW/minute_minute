@@ -76,6 +76,7 @@ menu menu_dump = {
     },
     1, // number of subtitles
     {
+			{"Return to Main Menu", &menu_close},
             {"Dump SEEPROM & OTP", &dump_seeprom_otp},
             {"Dump Espresso OTP & bootrom", &dump_espresso},
             {"Dump OTP via PRSHhax", &dump_otp_via_prshhax},
@@ -105,7 +106,6 @@ menu menu_dump = {
             {"Test SLC and Restore SLC.RAW", &dump_restore_test_slc_raw},
             {"Print SLC superblocks", &dump_print_slc_superblocks},
             {"Print MLC Info", &dump_print_mlc_info_menu},
-            {"Return to Main Menu", &menu_close},
     },
     30, // number of options
     0,
