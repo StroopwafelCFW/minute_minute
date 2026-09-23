@@ -79,7 +79,7 @@ menu menu_dump = {
             {"Dump SEEPROM & OTP", &dump_seeprom_otp},
             {"Dump Espresso OTP & bootrom", &dump_espresso},
             {"Dump OTP via PRSHhax", &dump_otp_via_prshhax},
-            {"Dump partial overwrite data", &dump_partial_overwrite},
+            {"Dump AES engine partial overwrite data", &dump_partial_overwrite},
             {"Dump SLC.RAW", &dump_slc_raw},
             {"Dump SLCCMPT.RAW", &dump_slccmpt_raw},
             {"Dump BOOT1_SLC.RAW", &dump_boot1_raw},
@@ -107,7 +107,7 @@ menu menu_dump = {
             {"Print MLC Info", &dump_print_mlc_info_menu},
             {"Return to Main Menu", &menu_close},
     },
-    29, // number of options
+    30, // number of options
     0,
     0
 };
@@ -2588,7 +2588,19 @@ void dump_partial_overwrite(void) {
 	// If all zeroes, then AES engine had been cleared.
 	if (_is_all_zero(partial_overwrite_data, sizeof(partial_overwrite_data))) {
 		printf("AES engine was already cleared when minute started.\n");
-		printf("Do you want to zero out diag boot1 version in seeprom?\n");
+		printf("To dump the boot1 key using this method, an earlier version of diag boot1 must be booted from the SD card.\n");
+		printf("This requires the diag boot1 version in SEEPROM to be set to zero.\n");
+		// Check the diag boot1 version already in seeprom.
+		{
+			u16 diag_boot1_ver = 0xff;
+			seeprom_read(&diag_boot1_ver, 0x99, 1);
+			if (diag_boot1_ver == 0) {
+				printf("The diag boot1 version in SEEPROM is already zero.\n");
+				console_power_or_eject_to_return();
+				return;
+			}
+		}
+		printf("Do you want to zero out diag boot1 version in SEEPROM?\n");
 		if (!console_abort_confirmation_power_no_eject_yes()) {
 			u16 ver = 0, readback_verify = 0xFF;
 			seeprom_write(&ver, 0x99, 1);
