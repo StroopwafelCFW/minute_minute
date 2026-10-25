@@ -33,11 +33,12 @@ irq_setup_stack:
     bx  lr
 
 v_irq:
-    push    {r0-r3, r9, r12, lr}
+    @ r4 is only pushed to keep sp 8-byte aligned (AAPCS) for the C call
+    push    {r0-r4, r9, r12, lr}
 
     blx     irq_handler
 
-    pop     {r0-r3, r9, r12, lr}
+    pop     {r0-r4, r9, r12, lr}
     subs    pc, lr, #4
 
 irq_kill:
