@@ -79,6 +79,16 @@ MLC only redirection is still possible by disabling SCFM. But that requires a ML
 
 If a file `redotp.bin` is found on the SD card, it will be used instead of the real otp / otp.bin (for defuse). OTP redirection requires redirection of SLC, SLCCMPT and MLC.
 
+### boot0
+
+`Backup and Restore` -> `Dump boot0 (Starbuck bootrom)` dumps the console's boot0 to `sdmc:/boot0.bin` and prints its SHA-1. minute re-maps the bootrom by clearing the boot0 disable bit in `LT_BOOT0`.
+
+The dump is the full 16KiB ROM. The first `0xA0` bytes are the exception vectors and a small reset stub, which copies the rest of boot0 to SRAM at `0x0D4100A0` and runs it from there. The [Wii U Firmware Emulator](https://github.com/kinnay/Wii-U-Firmware-Emulator) expects `files/boot0.bin` without them, so strip them first:
+
+```
+dd if=boot0.bin of=boot0_emu.bin bs=160 skip=1
+```
+
 ### SEEPROM
 
 SEEPROM redirection works similar to the OTP redirection, it looks for `redseeprom.bin`. If IOSU changes the SEEPROM, the changes won't be written back to the file and will be lost on reboot. The disc drive key is not redirected and is still read from the real SEEPROM.

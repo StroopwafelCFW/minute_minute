@@ -38,6 +38,9 @@
 
 #include "smc.h"
 #include "crypto.h"
+#include "irq.h"
+#include "memory.h"
+#include "sha.h"
 
 #ifndef MINUTE_BOOT1
 #ifndef FASTBOOT
@@ -79,6 +82,7 @@ menu menu_dump = {
 			{"Return to Main Menu", &menu_close},
             {"Dump SEEPROM & OTP", &dump_seeprom_otp},
             {"Dump Espresso OTP & bootrom", &dump_espresso},
+            {"Dump boot0 (Starbuck bootrom)", &dump_boot0},
             {"Dump OTP via PRSHhax", &dump_otp_via_prshhax},
             {"Dump AES engine partial overwrite data", &dump_partial_overwrite},
             {"Dump SLC.RAW", &dump_slc_raw},
@@ -107,7 +111,7 @@ menu menu_dump = {
             {"Print SLC superblocks", &dump_print_slc_superblocks},
             {"Print MLC Info", &dump_print_mlc_info_menu},
     },
-    30, // number of options
+    31, // number of options
     0,
     0
 };
@@ -504,6 +508,93 @@ void dump_espresso(void)
 
     ppc_dump_bootrom_otp();
 
+ret:
+    console_power_or_eject_to_return();
+}
+
+#define BOOT0_SIZE      (0x4000)
+#define BOOT0_DISABLE   (0x1000)
+#define BOOT0_NUM_WIN   (2)
+
+// boot0 can show up at either SRAM window, depending on the SRAM swap bit in LT_SRNPROT
+static const u32 boot0_windows[BOOT0_NUM_WIN] = { 0xFFFE0000, 0xFFFF0000 };
+
+// boot0 hides itself by setting LT_BOOT0 bit 12, but the bit can be cleared again.
+// While boot0 is mapped, our vectors and SRAM text at 0xFFFF0000 may be gone, so this
+// has to run from MEM2 with IRQs/FIQs masked and must not call anything in SRAM.
+static u32 _dump_read_boot0(u32* dst)
+{
+    u32 cookie = irq_kill();
+
+    // write back SRAM lines before the mapping changes, and don't hit stale SRAM lines
+    dc_flushrange((void*)boot0_windows[0], 0x20000);
+    clear32(LT_BOOT0, BOOT0_DISABLE);
+    u32 boot0_reg = read32(LT_BOOT0);
+
+    for (int w = 0; w < BOOT0_NUM_WIN; w++) {
+        const vu32* src = (const vu32*)boot0_windows[w];
+        for (u32 i = 0; i < BOOT0_SIZE / sizeof(u32); i++)
+            *dst++ = src[i];
+    }
+
+    // drop the cached ROM lines, they would shadow SRAM
+    for (int w = 0; w < BOOT0_NUM_WIN; w++)
+        dc_invalidaterange((void*)boot0_windows[w], BOOT0_SIZE);
+    set32(LT_BOOT0, BOOT0_DISABLE);
+    ic_invalidateall();
+
+    irq_restore(cookie);
+
+    return boot0_reg;
+}
+
+void dump_boot0(void)
+{
+    gfx_clear(GFX_ALL, BLACK);
+
+    u32* buf = memalign(32, BOOT0_SIZE * BOOT0_NUM_WIN);
+    if (!buf) {
+        printf("Failed to allocate buffer.\n");
+        goto ret;
+    }
+
+    printf("LT_BOOT0: %08lx, LT_SRNPROT: %08lx\n", read32(LT_BOOT0), read32(LT_SRNPROT));
+    printf("Reading boot0...\n");
+    u32 boot0_reg = _dump_read_boot0(buf);
+    dc_flushrange(buf, BOOT0_SIZE * BOOT0_NUM_WIN);
+    printf("LT_BOOT0 while enabled: %08lx\n", boot0_reg);
+
+    u32* boot0 = NULL;
+    for (int w = 0; w < BOOT0_NUM_WIN; w++) {
+        u32* win = buf + w * (BOOT0_SIZE / sizeof(u32));
+        if (memcmp(win, (void*)boot0_windows[w], BOOT0_SIZE)) {
+            printf("boot0 found at 0x%08lx\n", boot0_windows[w]);
+            boot0 = win;
+            break;
+        }
+    }
+
+    if (!boot0) {
+        printf("boot0 did not get mapped (read back SRAM), not writing a dump.\n");
+        goto free;
+    }
+
+    u32 sha[5];
+    sha_hash(boot0, sha, BOOT0_SIZE);
+    printf("SHA-1: %08lx%08lx%08lx%08lx%08lx\n", sha[0], sha[1], sha[2], sha[3], sha[4]);
+
+    printf("Dumping boot0 to `sdmc:/boot0.bin`...\n");
+    FILE* f_boot0 = fopen("sdmc:/boot0.bin", "wb");
+    if (!f_boot0) {
+        printf("Failed to open sdmc:/boot0.bin.\n");
+        goto free;
+    }
+    fwrite(boot0, 1, BOOT0_SIZE, f_boot0);
+    fclose(f_boot0);
+
+    printf("\nDone!\n");
+free:
+    free(buf);
 ret:
     console_power_or_eject_to_return();
 }
