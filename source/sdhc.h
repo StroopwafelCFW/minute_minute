@@ -30,6 +30,8 @@ struct sdhc_host_params {
     void (*abort)();
     enum rb_client rb;
     enum wb_client wb;
+    // raise the IRQ for card insertion/removal. Everything else is polled.
+    int card_detect_irq;
 };
 
 struct sdhc_host {
@@ -53,6 +55,7 @@ int sdhc_host_found(struct sdhc_host *, struct sdhc_host_params *, bus_space_tag
 void    sdhc_power(int, void *);
 void    sdhc_shutdown(struct sdhc_host *);
 int sdhc_intr(struct sdhc_host *);
+int sdhc_card_detect_intr(struct sdhc_host *);
 
 /* Host standard register set */
 #define SDHC_DMA_ADDR           0x00

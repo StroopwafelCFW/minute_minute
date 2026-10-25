@@ -21,10 +21,6 @@
 
 #include "latte.h"
 
-#ifdef CAN_HAZ_IRQ
-#include "irq.h"
-#endif
-
 // #define MLC_DEBUG
 #define MLC_SUPPORT_WRITE
 
@@ -290,6 +286,8 @@ out_clock:
 
 out_power:
     sdhc_bus_power(card.handle, 0);
+    // lets mlc_attach retry and mlc_init report the failure
+    card.inserted = card.selected = 0;
     return;
 }
 
@@ -587,6 +585,8 @@ out_clock:
 
 out_power:
     sdhc_bus_power(card.handle, 0);
+    // lets mlc_attach retry and mlc_init report the failure
+    card.inserted = card.selected = 0;
     return;
 }
 
@@ -965,11 +965,6 @@ u32 mlc_get_sectors(void)
     return card.num_sectors;
 }
 
-void mlc_irq(void)
-{
-    sdhc_intr(&mlc_host);
-}
-
 
 static int mlc_do_erase(u32 start, u32 end){
 #ifndef MLC_SUPPORT_WRITE
@@ -1067,9 +1062,7 @@ static void _mlc_do_init(void){
         .wb = WB_SD2,
     };
 
-#ifdef CAN_HAZ_IRQ
-    irql_enable(IRQL_SD2);
-#endif
+    // no hotswap, so no IRQ needed, all completions are polled
     sdhc_host_found(&mlc_host, &params, 0, SD2_REG_BASE, 1);
 }
 
@@ -1096,9 +1089,6 @@ void mlc_exit(void)
 {
     if(!initialized)
         return;
-#ifdef CAN_HAZ_IRQ
-    irql_disable(IRQL_SD2);
-#endif
     sdhc_shutdown(&mlc_host);
     initialized = false;
 }

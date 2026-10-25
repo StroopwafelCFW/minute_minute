@@ -78,6 +78,9 @@ void sdcard_attach(sdmmc_chipset_handle_t handle)
 
     DPRINTF(0, ("sdcard: attached new SD/MMC card\n"));
 
+    // card detect switches before the contacts have settled
+    udelay(100000);
+
     if (sdhc_card_detect(card.handle)) {
         DPRINTF(1, ("card is inserted. starting init sequence.\n"));
         // retries needed for card swap
@@ -443,6 +446,8 @@ out_clock:
 out_power:
     sdhc_bus_power(card.handle, 0);
 out:
+    // lets sdcard_attach retry
+    card.inserted = card.selected = 0;
     return;
 }
 
@@ -930,19 +935,14 @@ const sdmmc_device_context_t* sdcard_get_card_info(void) { // Renamed return typ
     return &card; // Return direct pointer to the static card context
 }
 
-void sdcard_irq(void)
-{
-    sdhc_intr(&sdcard_host);
-}
-
 #ifdef CAN_HAZ_IRQ
 static void sdcard_attach_work(void)
 {
     sdcard_attach(&sdcard_host);
 }
 
-// Called by sdhc_intr on card insertion/removal. The attach does a full
-// card init and mount, so run it outside of IRQ context.
+// Called by sdhc_intr when polling sees a card insertion/removal. The
+// attach does a full card init and mount, so it never runs in place.
 static void sdcard_attach_deferred(sdmmc_chipset_handle_t handle)
 {
     (void)handle;
@@ -950,10 +950,23 @@ static void sdcard_attach_deferred(sdmmc_chipset_handle_t handle)
 }
 #endif
 
+void sdcard_irq(void)
+{
+#ifdef CAN_HAZ_IRQ
+    if (sdhc_card_detect_intr(&sdcard_host))
+        irq_defer(IRQ_WORK_SDCARD);
+#endif
+}
+
 void sdcard_init(void)
 {
     struct sdhc_host_params params = {
+#ifdef CAN_HAZ_IRQ
+        .attach = &sdcard_attach_deferred,
+        .card_detect_irq = 1,
+#else
         .attach = &sdcard_attach,
+#endif
         .abort = &sdcard_abort,
         .rb = RB_SD0,
         .wb = WB_SD0,
@@ -961,12 +974,13 @@ void sdcard_init(void)
 
 #ifdef CAN_HAZ_IRQ
     irq_defer_register(IRQ_WORK_SDCARD, sdcard_attach_work, sdcard_is_busy);
-    irq_enable(IRQ_SD0);
 #endif
-    // attaches the current card synchronously
     sdhc_host_found(&sdcard_host, &params, 0, SD0_REG_BASE, 1);
 #ifdef CAN_HAZ_IRQ
-    sdcard_host.pa.attach = &sdcard_attach_deferred;
+    // sdhc_host_found only queued the attach, run it now
+    irq_defer_cancel(IRQ_WORK_SDCARD);
+    sdcard_attach(&sdcard_host);
+    irq_enable(IRQ_SD0);
 #endif
 }
 

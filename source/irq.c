@@ -183,12 +183,6 @@ int irq_handler(u32 spsr)
         write32(LT_INTSR_AHBALL_ARM, IRQF_SD0);
     }
 
-    if(lt_mask & IRQLF_SD2) {
-//      printf("IRQL: SD2\n");
-        mlc_irq();
-        write32(LT_INTSR_AHBLT_ARM, IRQLF_SD2);
-    }
-
     // Technically it shouldn't even be here...
     if(lt_mask & IRQLF_IOP2X) {
         write32(LT_INTSR_AHBLT_ARM, IRQLF_IOP2X);

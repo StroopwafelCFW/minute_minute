@@ -19,7 +19,6 @@
 
 int mlc_init(void);
 void mlc_exit(void);
-void mlc_irq(void);
 
 void mlc_attach(sdmmc_chipset_handle_t handle);
 void mlc_needs_discover(void);

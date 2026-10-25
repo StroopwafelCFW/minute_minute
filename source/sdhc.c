@@ -29,10 +29,6 @@
 #include "utils.h"
 #include "gpio.h"
 
-#ifdef CAN_HAZ_IRQ
-#include "irq.h"
-#endif
-
 //#define SDHC_DEBUG
 
 #define	EREMOTEIO	121
@@ -300,8 +296,15 @@ sdhc_host_reset(struct sdhc_host *hp)
 
     HWRITE2(hp, SDHC_NINTR_STATUS_EN, imask);
     HWRITE2(hp, SDHC_EINTR_STATUS_EN, SDHC_EINTR_STATUS_MASK);
-    HWRITE2(hp, SDHC_NINTR_SIGNAL_EN, imask);
-    HWRITE2(hp, SDHC_EINTR_SIGNAL_EN, SDHC_EINTR_SIGNAL_MASK);
+    /*
+     * Command/transfer completion and errors are polled (sdhc_wait_intr),
+     * only card insertion/removal may raise the IRQ.
+     */
+    if (hp->pa.card_detect_irq)
+        HWRITE2(hp, SDHC_NINTR_SIGNAL_EN, imask & (SDHC_CARD_REMOVAL | SDHC_CARD_INSERTION));
+    else
+        HWRITE2(hp, SDHC_NINTR_SIGNAL_EN, 0);
+    HWRITE2(hp, SDHC_EINTR_SIGNAL_EN, 0);
 
     return 0;
 }
@@ -603,17 +606,11 @@ sdhc_async_response(struct sdhc_host *hp, struct sdmmc_command *cmd)
 void
 sdhc_exec_command(struct sdhc_host *hp, struct sdmmc_command *cmd)
 {
-#ifdef CAN_HAZ_IRQ
-    u32 cookie = irq_kill();
-#endif
     //serial_send_u32(0x1234AAAA);
     sdhc_async_command(hp, cmd);
     //serial_send_u32(0x1234AAAB);
     sdhc_async_response(hp, cmd);
     //serial_send_u32(0x1234AAAD);
-#ifdef CAN_HAZ_IRQ
-    irq_restore(cookie);
-#endif
 }
 
 int
@@ -839,10 +836,8 @@ sdhc_wait_intr_debug(const char *funcname, int line, struct sdhc_host *hp, int m
     for (; timo > 0; timo--) {
         for (int j = 0; j < 1000; j++)
         {
-#ifdef CAN_HAZ_IRQ
-            if((get_cpsr() & 0b11111) == 0b10010 || (get_cpsr() & 0b11111) == 0b11111)
-#endif
-                sdhc_intr(hp); // seems backwards but ok
+            // completion is never signalled by IRQ, see sdhc_host_reset
+            sdhc_intr(hp);
 
             if (hp->intr_status != 0) {
                 status = hp->intr_status & mask;
@@ -972,6 +967,24 @@ sdhc_intr(struct sdhc_host *hp)
         hp->pa.attach(hp);
 
     return 1;
+}
+
+/*
+ * IRQ handler part: only acknowledges card insertion/removal, leaving
+ * all other status bits to the polling in sdhc_wait_intr.
+ * Returns non-zero if the card was inserted or removed.
+ */
+int
+sdhc_card_detect_intr(struct sdhc_host *hp)
+{
+    u_int16_t status = HREAD2(hp, SDHC_NINTR_STATUS) &
+        (SDHC_CARD_REMOVAL | SDHC_CARD_INSERTION);
+
+    // Not HWRITE2: its read-modify-write would also clear the error
+    // status bits in the upper half, which the polling code still needs.
+    if (status)
+        HWRITE4(hp, SDHC_NINTR_STATUS, status);
+    return status != 0;
 }
 
 #ifdef SDHC_DEBUG
