@@ -43,6 +43,29 @@ static struct sdhc_host sdcard_host;
 static sdmmc_device_context_t card; // Changed type here
 static int sdcard_multiple_fallback = 0; // Moved from sdcard_ctx
 
+// Transfers in progress. A card (re)attach is deferred until they finish.
+static volatile int sdcard_busy = 0;
+static volatile int sdcard_async_busy = 0;
+
+static int sdcard_is_busy(void)
+{
+    return sdcard_busy || sdcard_async_busy;
+}
+
+static void sdcard_begin(void)
+{
+    sdcard_busy++;
+}
+
+static void sdcard_end(void)
+{
+    sdcard_busy--;
+#ifdef CAN_HAZ_IRQ
+    if (!sdcard_busy && !sdcard_async_busy)
+        irq_deferred_poll();
+#endif
+}
+
 void sdcard_attach(sdmmc_chipset_handle_t handle)
 {
 #ifndef MINUTE_BOOT1
@@ -468,7 +491,7 @@ int sdcard_ack_card(void)
     return -1;
 }
 
-int sdcard_start_read(u32 blk_start, u32 blk_count, void *data, struct sdmmc_command* cmdbuf)
+static int _sdcard_start_read(u32 blk_start, u32 blk_count, void *data, struct sdmmc_command* cmdbuf)
 {
 //  printf("%s(%u, %u, %p)\n", __FUNCTION__, blk_start, blk_count, data);
     if (card.inserted == 0) {
@@ -519,7 +542,7 @@ int sdcard_start_read(u32 blk_start, u32 blk_count, void *data, struct sdmmc_com
     return 0;
 }
 
-int sdcard_end_read(struct sdmmc_command* cmdbuf)
+static int _sdcard_end_read(struct sdmmc_command* cmdbuf)
 {
 //  printf("%s(%u, %u, %p)\n", __FUNCTION__, blk_start, blk_count, data);
     if (card.inserted == 0) {
@@ -556,7 +579,7 @@ int sdcard_end_read(struct sdmmc_command* cmdbuf)
     return 0;
 }
 
-int sdcard_read(u32 blk_start, u32 blk_count, void *data)
+static int _sdcard_read(u32 blk_start, u32 blk_count, void *data)
 {
     struct sdmmc_command cmd;
 
@@ -566,7 +589,7 @@ retry_single:
         int ret = 0;
         for (int i = 0; i < blk_count; i++)
         {
-            ret = sdcard_read(blk_start + i, 1, data);
+            ret = _sdcard_read(blk_start + i, 1, data);
             if (ret) return ret;
             data = (void*)((intptr_t)data + SDMMC_DEFAULT_BLOCKLEN);
         }
@@ -648,8 +671,35 @@ retry_single:
     return 0;
 }
 
+int sdcard_read(u32 blk_start, u32 blk_count, void *data)
+{
+    sdcard_begin();
+    int ret = _sdcard_read(blk_start, blk_count, data);
+    sdcard_end();
+    return ret;
+}
+
+int sdcard_start_read(u32 blk_start, u32 blk_count, void *data, struct sdmmc_command* cmdbuf)
+{
+    sdcard_begin();
+    int ret = _sdcard_start_read(blk_start, blk_count, data, cmdbuf);
+    if (!ret)
+        sdcard_async_busy = 1;
+    sdcard_end();
+    return ret;
+}
+
+int sdcard_end_read(struct sdmmc_command* cmdbuf)
+{
+    sdcard_begin();
+    int ret = _sdcard_end_read(cmdbuf);
+    sdcard_async_busy = 0;
+    sdcard_end();
+    return ret;
+}
+
 #ifndef LOADER
-int sdcard_start_write(u32 blk_start, u32 blk_count, void *data, struct sdmmc_command* cmdbuf)
+static int _sdcard_start_write(u32 blk_start, u32 blk_count, void *data, struct sdmmc_command* cmdbuf)
 {
     if (card.inserted == 0) {
         printf("sdcard: WRITE: no card inserted.\n");
@@ -699,7 +749,7 @@ int sdcard_start_write(u32 blk_start, u32 blk_count, void *data, struct sdmmc_co
     return 0;
 }
 
-int sdcard_end_write(struct sdmmc_command* cmdbuf)
+static int _sdcard_end_write(struct sdmmc_command* cmdbuf)
 {
     if (card.inserted == 0) {
         printf("sdcard: WRITE: no card inserted.\n");
@@ -735,7 +785,7 @@ int sdcard_end_write(struct sdmmc_command* cmdbuf)
     return 0;
 }
 
-int sdcard_write(u32 blk_start, u32 blk_count, void *data)
+static int _sdcard_write(u32 blk_start, u32 blk_count, void *data)
 {
     struct sdmmc_command cmd;
 
@@ -749,7 +799,7 @@ retry_single:
         int ret = 0;
         for (int i = 0; i < blk_count; i++)
         {
-            ret = sdcard_write(blk_start + i, 1, data);
+            ret = _sdcard_write(blk_start + i, 1, data);
             if (ret) return ret;
             data = (void*)((intptr_t)data + SDMMC_DEFAULT_BLOCKLEN);
         }
@@ -824,6 +874,33 @@ retry_single:
     return 0;
 }
 
+int sdcard_write(u32 blk_start, u32 blk_count, void *data)
+{
+    sdcard_begin();
+    int ret = _sdcard_write(blk_start, blk_count, data);
+    sdcard_end();
+    return ret;
+}
+
+int sdcard_start_write(u32 blk_start, u32 blk_count, void *data, struct sdmmc_command* cmdbuf)
+{
+    sdcard_begin();
+    int ret = _sdcard_start_write(blk_start, blk_count, data, cmdbuf);
+    if (!ret)
+        sdcard_async_busy = 1;
+    sdcard_end();
+    return ret;
+}
+
+int sdcard_end_write(struct sdmmc_command* cmdbuf)
+{
+    sdcard_begin();
+    int ret = _sdcard_end_write(cmdbuf);
+    sdcard_async_busy = 0;
+    sdcard_end();
+    return ret;
+}
+
 int sdcard_wait_data(void)
 {
     struct sdmmc_command cmd;
@@ -858,6 +935,21 @@ void sdcard_irq(void)
     sdhc_intr(&sdcard_host);
 }
 
+#ifdef CAN_HAZ_IRQ
+static void sdcard_attach_work(void)
+{
+    sdcard_attach(&sdcard_host);
+}
+
+// Called by sdhc_intr on card insertion/removal. The attach does a full
+// card init and mount, so run it outside of IRQ context.
+static void sdcard_attach_deferred(sdmmc_chipset_handle_t handle)
+{
+    (void)handle;
+    irq_defer(IRQ_WORK_SDCARD);
+}
+#endif
+
 void sdcard_init(void)
 {
     struct sdhc_host_params params = {
@@ -868,15 +960,21 @@ void sdcard_init(void)
     };
 
 #ifdef CAN_HAZ_IRQ
+    irq_defer_register(IRQ_WORK_SDCARD, sdcard_attach_work, sdcard_is_busy);
     irq_enable(IRQ_SD0);
 #endif
+    // attaches the current card synchronously
     sdhc_host_found(&sdcard_host, &params, 0, SD0_REG_BASE, 1);
+#ifdef CAN_HAZ_IRQ
+    sdcard_host.pa.attach = &sdcard_attach_deferred;
+#endif
 }
 
 void sdcard_exit(void)
 {
 #ifdef CAN_HAZ_IRQ
     irq_disable(IRQ_SD0);
+    irq_defer_cancel(IRQ_WORK_SDCARD);
 #endif
     sdhc_shutdown(&sdcard_host);
 }

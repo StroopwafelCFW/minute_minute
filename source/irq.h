@@ -60,6 +60,19 @@
 
 #define IRQ_ALARM_MS2REG(x) (1898 * x)
 
+// Deferred work: scheduled from IRQ context, run in System mode with IRQs
+// enabled on the interrupted code's stack, before that code resumes.
+#define IRQ_WORK_SDCARD 0
+
+typedef void (*irq_work_fn)(void);
+// returns non-zero while the work must not run (e.g. hardware in use)
+typedef int (*irq_work_blocked_fn)(void);
+
+void irq_defer_register(u32 work, irq_work_fn fn, irq_work_blocked_fn blocked);
+void irq_defer(u32 work);
+void irq_defer_cancel(u32 work);
+void irq_deferred_poll(void);
+
 void irq_initialize(void);
 void irq_shutdown(void);
 

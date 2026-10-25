@@ -24,7 +24,13 @@
 
 static u32 _alarm_frequency = 0;
 
+static irq_work_fn _work_fn[32];
+static irq_work_blocked_fn _work_blocked[32];
+static volatile u32 _work_pending = 0;
+static volatile int _work_running = 0;
+
 void irq_setup_stack(void);
+void irq_deferred_run(void);
 
 void irq_initialize(void)
 {
@@ -52,7 +58,73 @@ void irq_shutdown(void)
     irq_kill();
 }
 
-void irq_handler(void)
+void irq_defer_register(u32 work, irq_work_fn fn, irq_work_blocked_fn blocked)
+{
+    _work_fn[work] = fn;
+    _work_blocked[work] = blocked;
+}
+
+void irq_defer(u32 work)
+{
+    u32 cookie = irq_kill();
+    _work_pending |= 1 << work;
+    irq_restore(cookie);
+}
+
+void irq_defer_cancel(u32 work)
+{
+    u32 cookie = irq_kill();
+    _work_pending &= ~(1 << work);
+    irq_restore(cookie);
+}
+
+// pending work that may run now, call with IRQs disabled
+static u32 irq_deferred_runnable(void)
+{
+    u32 runnable = 0;
+    for (u32 pending = _work_pending; pending; pending &= pending - 1) {
+        int i = __builtin_ctz(pending);
+        if (!_work_blocked[i] || !_work_blocked[i]())
+            runnable |= 1 << i;
+    }
+    return runnable;
+}
+
+// Called from v_irq in System mode with IRQs enabled, or from irq_deferred_poll
+void irq_deferred_run(void)
+{
+    _work_running = 1;
+    for (;;) {
+        u32 cookie = irq_kill();
+        u32 runnable = irq_deferred_runnable();
+        if (!runnable) {
+            _work_running = 0;
+            irq_restore(cookie);
+            return;
+        }
+        int i = __builtin_ctz(runnable);
+        _work_pending &= ~(1 << i);
+        irq_restore(cookie);
+
+        _work_fn[i]();
+    }
+}
+
+// Run work that was blocked when its IRQ fired. Call when the blocking
+// condition ends.
+void irq_deferred_poll(void)
+{
+    u32 cpsr = get_cpsr();
+    // only from plain System mode code that isn't in an IRQ-off section
+    if ((cpsr & 0x1f) != 0x1f || (cpsr & CPSR_IRQDIS))
+        return;
+    if (_work_running || !_work_pending)
+        return;
+    irq_deferred_run();
+}
+
+// Returns non-zero to make v_irq run irq_deferred_run before resuming
+int irq_handler(u32 spsr)
 {
 #ifdef MINUTE_BOOT1
     // somehow needed on WUP-50 when loaded from UDPIH
@@ -132,6 +204,11 @@ void irq_handler(void)
         printf("IRQ: LT unknown 0x%08x\n", lt_mask);
         write32(LT_INTSR_AHBLT_ARM, lt_mask);
     }
+
+    // Only redirect plain System mode code, never an exception handler
+    if (!_work_pending || _work_running || (spsr & 0x1f) != 0x1f)
+        return 0;
+    return irq_deferred_runnable() != 0;
 }
 
 void irq_enable(u32 irq)
