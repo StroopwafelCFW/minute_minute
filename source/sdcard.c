@@ -66,6 +66,26 @@ static void sdcard_end(void)
 #endif
 }
 
+// Card detect bounces while the card is inserted or removed. Wait until it
+// has been stable for 100ms (at most 1s) and return the final state.
+static int sdcard_wait_card_stable(void)
+{
+    int present = sdhc_card_detect(card.handle);
+    int stable_ms = 0;
+
+    for (int ms = 0; ms < 1000 && stable_ms < 100; ms++) {
+        udelay(1000);
+        int now = sdhc_card_detect(card.handle);
+        if (now == present) {
+            stable_ms++;
+        } else {
+            present = now;
+            stable_ms = 0;
+        }
+    }
+    return present;
+}
+
 void sdcard_attach(sdmmc_chipset_handle_t handle)
 {
 #ifndef MINUTE_BOOT1
@@ -78,21 +98,28 @@ void sdcard_attach(sdmmc_chipset_handle_t handle)
 
     DPRINTF(0, ("sdcard: attached new SD/MMC card\n"));
 
-    // card detect switches before the contacts have settled
-    udelay(100000);
+    int present = sdcard_wait_card_stable();
+#ifdef CAN_HAZ_IRQ
+    // the bouncing queued more attaches, this one already covers them
+    irq_defer_cancel(IRQ_WORK_SDCARD);
+#endif
 
-    if (sdhc_card_detect(card.handle)) {
+    if (present) {
         DPRINTF(1, ("card is inserted. starting init sequence.\n"));
         // retries needed for card swap
         for (int i = 0; i < 16; i++)
         {
             sdcard_needs_discover();
-            if (card.inserted) break;
+            if (card.inserted || !sdhc_card_detect(card.handle)) break;
+            // give the card some time before powering it up again
+            udelay(10000);
         }
 
 #ifndef MINUTE_BOOT1
-        int res = ELM_Mount();
-        printf("Mounting SD card returned %d\n", res);
+        if (card.inserted) {
+            int res = ELM_Mount();
+            printf("Mounting SD card returned %d\n", res);
+        }
 #endif
     }
 }
