@@ -1031,7 +1031,7 @@ u32 _main(void *base)
         while((autoboot_timeout_s-- > 0) && autoboot)
         {
             printf("Autobooting in %d seconds...\n", (int)autoboot_timeout_s + 1);
-            printf("Press the POWER button or EJECT button to skip autoboot.\n");
+            printf("Press the POWER button or EJECT button (or any key on serial) to skip autoboot.\n");
             for(u32 i = 0; i < 1000000; i += 100000)
             {
                 // Don't wait in ECO mode or IOSU reload.
@@ -1041,6 +1041,14 @@ u32 _main(void *base)
                 u8 input = smc_get_events();
                 udelay(100000);
                 if((input & SMC_EJECT_BUTTON) || (input & SMC_POWER_BUTTON)) {
+                    autoboot = false;
+                    break;
+                }
+
+                char serial_tmp[256];
+                serial_poll();
+                if (serial_in_read(serial_tmp) > 0) {
+                    printf("Autoboot skipped (serial).\n");
                     autoboot = false;
                     break;
                 }
@@ -1205,7 +1213,15 @@ void main_reload(void)
 {
     gfx_clear(GFX_ALL, BLACK);
 
-    boot.vector = ancast_iop_load("minute.img");
+    // Same order as the SD boot path: minute.img if present, else fw.img
+    boot.vector = 0;
+    FILE* f_test = fopen("sdmc:/minute.img", "rb");
+    if (f_test) {
+        fclose(f_test);
+        boot.vector = ancast_iop_load("sdmc:/minute.img");
+    }
+    if (!boot.vector)
+        boot.vector = ancast_iop_load("sdmc:/fw.img");
     boot.needs_otp = 0;
     boot.is_patched = 0;
 
@@ -1213,7 +1229,7 @@ void main_reload(void)
         boot.mode = 0;
         menu_reset();
     } else {
-        error_wait("Failed to load minute.img!\n");
+        error_wait("Failed to load sdmc:/fw.img!\n");
     }
 }
 

@@ -26,9 +26,16 @@
 #include "sha.h"
 #include "asic.h"
 #include "ppc.h"
+#include <unistd.h>
+#include <dirent.h>
+#include <errno.h>
 
 #define INTCON_HISTORY_DEPTH (64)
 #define INTCON_COMMAND_MAX_LEN (256)
+// ALL_PURPOSE_TMP_BUF is also used for 0x800000-byte fw.img reads in main.c
+#define INTCON_UPLOAD_MAX (0x800000)
+// Polls without data before an in-progress transfer is considered dead
+#define INTCON_UPLOAD_IDLE_POLLS (100000)
 
 static char* intcon_command_history[INTCON_HISTORY_DEPTH];
 
@@ -104,6 +111,8 @@ void intcon_delete()
 void intcon_show_help(void)
 {
     printf("Valid commands: exit, quit, reset, restart, shutdown, smc, peek, poke, set, clear, help, ?\n");
+    printf("                upload <sd path>, rm <sd path>, ls <sd dir>, boot <menu entry>, reload,\n");
+    printf("                up, upp, uppl, upb\n");
 }
 
 void intcon_smc_cmd(int argc, char** argv)
@@ -513,7 +522,7 @@ int intcon_upload(const char* fpath)
     u32 bytes_left;
     int is_synced = 0;
     u8* out_iter;
-    FILE* f_fw;
+    FILE* f_fw = NULL;
     int attempts;
 
     const u8 magic_upld[13] = {0x55, 0xaa, 0x55, 0xaa, 0x55, 0xaa, 0x55, 0xaa, 0x55, 0x50, 0x4C, 0x44, 0x0a};
@@ -553,7 +562,15 @@ int intcon_upload(const char* fpath)
         if (is_synced) break;
     }
 
-    if (attempts <= 0) {
+    if (attempts <= 0 || !is_synced) {
+        printf("No response from host.\n");
+        goto fail;
+    }
+
+    serial_remainder = serial_len-serial_idx;
+    transfer_len = read32_unaligned(last_12+8);
+    if (transfer_len == 0 || transfer_len > INTCON_UPLOAD_MAX) {
+        printf("Bad transfer length 0x%08lx (max 0x%08x).\n", transfer_len, INTCON_UPLOAD_MAX);
         goto fail;
     }
 
@@ -564,15 +581,13 @@ int intcon_upload(const char* fpath)
         goto fail;
     }
 
-    serial_remainder = serial_len-serial_idx;
-    transfer_len = read32_unaligned(last_12+8);
     bytes_left = transfer_len;
     //printf("Transferring 0x%08x bytes (%x)\n", transfer_len, serial_remainder);
 
-    if (bytes_left < serial_remainder) {
+    if (bytes_left <= serial_remainder) {
         memcpy(out_iter, serial_tmp+serial_idx, bytes_left);
         bytes_left = 0;
-        goto done;
+        goto received;
     }
 
     if (serial_remainder)
@@ -582,7 +597,7 @@ int intcon_upload(const char* fpath)
         bytes_left -= serial_remainder;
     }
 
-    attempts = 5000;
+    attempts = INTCON_UPLOAD_IDLE_POLLS;
     while (--attempts)
     {
         //for (int i = 0; i < 128; i++)
@@ -591,7 +606,7 @@ int intcon_upload(const char* fpath)
         }
         serial_len = serial_in_read(serial_tmp);
         if (serial_len) {
-            attempts = 5000;
+            attempts = INTCON_UPLOAD_IDLE_POLLS;
         }
 
         if (serial_len > bytes_left) {
@@ -609,28 +624,69 @@ int intcon_upload(const char* fpath)
     }
 
     if (attempts <= 0) {
+        printf("Timed out, 0x%08lx of 0x%08lx bytes missing.\n", bytes_left, transfer_len);
         goto fail;
     }
 
-    fwrite((u8*)ALL_PURPOSE_TMP_BUF, transfer_len, 1, f_fw);
-
-done:
+received:
     serial_disallow_zeros();
+    if (fwrite((u8*)ALL_PURPOSE_TMP_BUF, transfer_len, 1, f_fw) != 1) {
+        printf("Failed to write `%s`.\n", fpath);
+        goto fail;
+    }
+    if (fclose(f_fw)) {
+        f_fw = NULL;
+        printf("Failed to close `%s`.\n", fpath);
+        goto fail;
+    }
+    f_fw = NULL;
+
     printf("Transfer complete!\n");
     u32 hash[SHA_HASH_WORDS] = {0};
     sha_hash((void*)ALL_PURPOSE_TMP_BUF, hash, transfer_len);
 
     printf("sha1:   %08lX%08lX%08lX%08lX%08lX\n", hash[0], hash[1], hash[2], hash[3], hash[4]);
-    fclose(f_fw);
+    printf("upload: ok %lu %s\n", transfer_len, fpath);
 
     return 0;
 fail:
     serial_disallow_zeros();
     printf("Transfer failed.\n");
-    fclose(f_fw);
+    printf("upload: fail %s\n", fpath);
+    if (f_fw) {
+        fclose(f_fw);
+    }
 
-    console_power_to_exit();
     return 1;
+}
+
+// Output is meant to be machine-parsable: one entry per line, then a status line
+void intcon_ls(const char* path)
+{
+    DIR* dir = opendir(path);
+    if (!dir) {
+        printf("ls: fail %d %s\n", errno, path);
+        return;
+    }
+    int count = 0;
+    struct dirent* entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, "..")) continue;
+        printf("  %s%s\n", entry->d_name, entry->d_type == DT_DIR ? "/" : "");
+        count++;
+    }
+    closedir(dir);
+    printf("ls: ok %d %s\n", count, path);
+}
+
+void intcon_rm(const char* path)
+{
+    if (unlink(path)) {
+        printf("rm: fail %d %s\n", errno, path);
+    }
+    else {
+        printf("rm: ok %s\n", path);
+    }
 }
 
 void intcon_handle_cmd(const char* pCmd)
@@ -672,6 +728,43 @@ void intcon_handle_cmd(const char* pCmd)
     else if (!strcmp(cmd, "shutdown")) {
         main_shutdown();
         intcon_active = 0;
+    }
+    else if (!strcmp(cmd, "ls")) {
+        intcon_ls(argc >= 2 ? argv[1] : "sdmc:/wiiu/ios_plugins");
+    }
+    else if (!strcmp(cmd, "rm") || !strcmp(cmd, "del")) {
+        if (argc < 2) {
+            printf("Usage: rm <sd path> [more paths...]\n");
+        }
+        for (int i = 1; i < argc; i++) {
+            intcon_rm(argv[i]);
+        }
+    }
+    else if (!strcmp(cmd, "upload") && argc >= 2) {
+        // Generic upload: write the file and stay in the console
+        intcon_upload(argv[1]);
+    }
+#ifndef FASTBOOT
+    else if (!strcmp(cmd, "boot")) {
+        int entry = (argc >= 2) ? (int)strtol(argv[1], NULL, 0) : 0;
+        if (entry < 1 || entry > menu_main.entries
+            || menu_main.option[entry-1].callback == main_interactive_console) {
+            printf("Usage: boot <1-%d>  (main menu entry)\n", menu_main.entries);
+            for (int i = 0; i < menu_main.entries; i++) {
+                printf("  %2d: %s\n", i+1, menu_main.option[i].text);
+            }
+        }
+        else {
+            menu_main.selected = entry-1; // so IOSU reload autoboots the same entry
+            printf("Booting %d: %s\n", entry, menu_main.option[entry-1].text);
+            intcon_active = 0;
+            menu_main.option[entry-1].callback();
+        }
+    }
+#endif // !FASTBOOT
+    else if (!strcmp(cmd, "reload")) {
+        intcon_active = 0;
+        main_reload();
     }
     else if (!strcmp(cmd, "up") || !strcmp(cmd, "upload")) {
         if (!intcon_upload("sdmc:/fw.img")) {
