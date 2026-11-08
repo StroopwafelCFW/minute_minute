@@ -29,6 +29,7 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <errno.h>
+#include <sys/stat.h>
 
 #define INTCON_HISTORY_DEPTH (64)
 #define INTCON_COMMAND_MAX_LEN (256)
@@ -111,7 +112,7 @@ void intcon_delete()
 void intcon_show_help(void)
 {
     printf("Valid commands: exit, quit, reset, restart, shutdown, smc, peek, poke, set, clear, help, ?\n");
-    printf("                upload <sd path>, rm <sd path>, ls <sd dir>, boot <menu entry>, reload,\n");
+    printf("                upload <sd path>, rm <sd path>, ls <sd dir>, hash <sd path>, boot <menu entry>, reload,\n");
     printf("                up, upp, uppl, upb\n");
 }
 
@@ -672,11 +673,43 @@ void intcon_ls(const char* path)
     struct dirent* entry;
     while ((entry = readdir(dir)) != NULL) {
         if (!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, "..")) continue;
-        printf("  %s%s\n", entry->d_name, entry->d_type == DT_DIR ? "/" : "");
+        char full[512];
+        struct stat st;
+        snprintf(full, sizeof(full), "%s/%s", path, entry->d_name);
+        if (entry->d_type == DT_DIR) {
+            printf("  %s/\n", entry->d_name);
+        }
+        else if (!stat(full, &st)) {
+            printf("  %s %lu\n", entry->d_name, (unsigned long)st.st_size);
+        }
+        else {
+            printf("  %s\n", entry->d_name);
+        }
         count++;
     }
     closedir(dir);
     printf("ls: ok %d %s\n", count, path);
+}
+
+// Read a file back from SD and print its real size and sha1
+void intcon_hash(const char* path)
+{
+    FILE* f = fopen(path, "rb");
+    if (!f) {
+        printf("hash: fail %d %s\n", errno, path);
+        return;
+    }
+    size_t len = fread((void*)ALL_PURPOSE_TMP_BUF, 1, INTCON_UPLOAD_MAX, f);
+    int at_end = feof(f);
+    fclose(f);
+    if (!at_end && len == INTCON_UPLOAD_MAX) {
+        printf("hash: fail toobig %s\n", path);
+        return;
+    }
+    u32 hash[SHA_HASH_WORDS] = {0};
+    sha_hash((void*)ALL_PURPOSE_TMP_BUF, hash, len);
+    printf("hash: ok %u %08lX%08lX%08lX%08lX%08lX %s\n", (unsigned)len,
+           hash[0], hash[1], hash[2], hash[3], hash[4], path);
 }
 
 void intcon_rm(const char* path)
@@ -731,6 +764,14 @@ void intcon_handle_cmd(const char* pCmd)
     }
     else if (!strcmp(cmd, "ls")) {
         intcon_ls(argc >= 2 ? argv[1] : "sdmc:/wiiu/ios_plugins");
+    }
+    else if (!strcmp(cmd, "hash")) {
+        if (argc < 2) {
+            printf("Usage: hash <sd path>\n");
+        }
+        else {
+            intcon_hash(argv[1]);
+        }
     }
     else if (!strcmp(cmd, "rm") || !strcmp(cmd, "del")) {
         if (argc < 2) {
